@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>OscillationControlWindow</class>
+ <widget class="QMainWindow" name="OscillationControlWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>930</width>
+    <height>520</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MFLI Oscillation Control</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QGroupBox" name="connectionGroup">
+      <property name="title">
+       <string>LabOne connection</string>
+      </property>
+      <layout class="QHBoxLayout" name="connectionLayout">
+       <item>
+        <widget class="QLabel" name="hostLabel">
+         <property name="text">
+          <string>Data Server:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="hostEdit">
+         <property name="text">
+          <string>localhost</string>
+         </property>
+         <property name="placeholderText">
+          <string>localhost or MFLI IP address</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="serialLabel">
+         <property name="text">
+          <string>Device:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="serialEdit">
+         <property name="placeholderText">
+          <string>DEV1234</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="connectButton">
+         <property name="text">
+          <string>Connect</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="refreshButton">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Refresh</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="controllerLayout">
+      <item>
+       <widget class="QGroupBox" name="phaseGroup">
+        <property name="title">
+         <string>Phase / Frequency Controller — LabOne PLL 1</string>
+        </property>
+        <layout class="QFormLayout" name="phaseForm">
+         <item row="0" column="0">
+          <widget class="QLabel" name="phaseControllerLabel">
+           <property name="text">
+            <string>Controller</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QCheckBox" name="phaseEnable">
+           <property name="text">
+            <string>Enabled</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="phaseSetpointLabel">
+           <property name="text">
+            <string>Phase setpoint</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QDoubleSpinBox" name="phaseSetpoint">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-360.000000000000000</double></property>
+           <property name="maximum"><double>360.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> deg</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="phasePLabel">
+           <property name="text"><string>P</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QDoubleSpinBox" name="phaseP">
+           <property name="decimals"><number>9</number></property>
+           <property name="minimum"><double>-1000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.010000000000000</double></property>
+           <property name="suffix"><string> Hz/deg</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="phaseILabel">
+           <property name="text"><string>I</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QDoubleSpinBox" name="phaseI">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000000.000000000000000</double></property>
+           <property name="singleStep"><double>1.000000000000000</double></property>
+           <property name="suffix"><string> Hz/(deg·s)</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="phaseCenterLabel">
+           <property name="text"><string>Frequency center</string></property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QDoubleSpinBox" name="phaseCenter">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>0.000000000000000</double></property>
+           <property name="maximum"><double>10000000000.000000000000000</double></property>
+           <property name="singleStep"><double>1.000000000000000</double></property>
+           <property name="suffix"><string> Hz</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QLabel" name="phaseLowerLabel">
+           <property name="text"><string>Lower limit (relative)</string></property>
+          </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="QDoubleSpinBox" name="phaseLower">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000.000000000000000</double></property>
+           <property name="singleStep"><double>1.000000000000000</double></property>
+           <property name="suffix"><string> Hz</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="6" column="0">
+          <widget class="QLabel" name="phaseUpperLabel">
+           <property name="text"><string>Upper limit (relative)</string></property>
+          </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QDoubleSpinBox" name="phaseUpper">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000.000000000000000</double></property>
+           <property name="singleStep"><double>1.000000000000000</double></property>
+           <property name="suffix"><string> Hz</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="7" column="0">
+          <widget class="QLabel" name="phaseErrorTitle">
+           <property name="text"><string>Phase error</string></property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="QLabel" name="phaseErrorValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="8" column="0">
+          <widget class="QLabel" name="phaseShiftTitle">
+           <property name="text"><string>Frequency shift</string></property>
+          </widget>
+         </item>
+         <item row="8" column="1">
+          <widget class="QLabel" name="phaseShiftValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="9" column="0">
+          <widget class="QLabel" name="phaseValueTitle">
+           <property name="text"><string>Actual frequency</string></property>
+          </widget>
+         </item>
+         <item row="9" column="1">
+          <widget class="QLabel" name="phaseValueValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="10" column="0">
+          <widget class="QLabel" name="phaseLockTitle">
+           <property name="text"><string>PLL lock</string></property>
+          </widget>
+         </item>
+         <item row="10" column="1">
+          <widget class="QLabel" name="phaseLockValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="amplitudeGroup">
+        <property name="title">
+         <string>Amplitude Controller — LabOne PID 3</string>
+        </property>
+        <layout class="QFormLayout" name="amplitudeForm">
+         <item row="0" column="0">
+          <widget class="QLabel" name="ampControllerLabel">
+           <property name="text"><string>Controller</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QCheckBox" name="ampEnable">
+           <property name="text"><string>Enabled</string></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="ampSetpointLabel">
+           <property name="text"><string>Amplitude setpoint</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QDoubleSpinBox" name="ampSetpoint">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> mV</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="ampPLabel">
+           <property name="text"><string>P</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QDoubleSpinBox" name="ampP">
+           <property name="decimals"><number>9</number></property>
+           <property name="minimum"><double>-1000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.001000000000000</double></property>
+           <property name="suffix"><string> V/V</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="ampILabel">
+           <property name="text"><string>I</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QDoubleSpinBox" name="ampI">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> 1/s</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QLabel" name="ampCenterLabel">
+           <property name="text"><string>Output center</string></property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QDoubleSpinBox" name="ampCenter">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> mV</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QLabel" name="ampLowerLabel">
+           <property name="text"><string>Lower limit (relative)</string></property>
+          </widget>
+         </item>
+         <item row="5" column="1">
+          <widget class="QDoubleSpinBox" name="ampLower">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> mV</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="6" column="0">
+          <widget class="QLabel" name="ampUpperLabel">
+           <property name="text"><string>Upper limit (relative)</string></property>
+          </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QDoubleSpinBox" name="ampUpper">
+           <property name="decimals"><number>6</number></property>
+           <property name="minimum"><double>-1000000.000000000000000</double></property>
+           <property name="maximum"><double>1000000.000000000000000</double></property>
+           <property name="singleStep"><double>0.100000000000000</double></property>
+           <property name="suffix"><string> mV</string></property>
+           <property name="keyboardTracking"><bool>false</bool></property>
+          </widget>
+         </item>
+         <item row="7" column="0">
+          <widget class="QLabel" name="ampErrorTitle">
+           <property name="text"><string>Amplitude error</string></property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="QLabel" name="ampErrorValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="8" column="0">
+          <widget class="QLabel" name="ampShiftTitle">
+           <property name="text"><string>Drive shift</string></property>
+          </widget>
+         </item>
+         <item row="8" column="1">
+          <widget class="QLabel" name="ampShiftValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="9" column="0">
+          <widget class="QLabel" name="ampValueTitle">
+           <property name="text"><string>Drive output</string></property>
+          </widget>
+         </item>
+         <item row="9" column="1">
+          <widget class="QLabel" name="ampValueValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="10" column="0">
+          <widget class="QLabel" name="ampActualMinTitle">
+           <property name="text"><string>Actual minimum drive</string></property>
+          </widget>
+         </item>
+         <item row="10" column="1">
+          <widget class="QLabel" name="ampActualMinValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+         <item row="11" column="0">
+          <widget class="QLabel" name="ampActualMaxTitle">
+           <property name="text"><string>Actual maximum drive</string></property>
+          </widget>
+         </item>
+         <item row="11" column="1">
+          <widget class="QLabel" name="ampActualMaxValue">
+           <property name="text"><string>—</string></property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
