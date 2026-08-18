@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import math
 import sys
+import threading
 import time
 
+import numpy as np
 import yaml
+from scipy.optimize import curve_fit
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
@@ -17,6 +24,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QPushButton,
+    QProgressBar,
+    QSpinBox,
     QStatusBar,
     QWidget,
     QStyleFactory,
@@ -30,6 +39,7 @@ from zhinst.toolkit import Session
 PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
+SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
 
 T = TypeVar("T", bound=QObject)
@@ -51,6 +61,149 @@ def _last_scalar(payload: Any) -> float | None:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+
+
+def _wrap_phase_deg(value: float | np.ndarray) -> float | np.ndarray:
+    """Wrap phase to the LabOne/Nanonis-style [-180, 180) interval."""
+    return (np.asarray(value) + 180.0) % 360.0 - 180.0
+
+
+def _resonator_amplitude_model(
+    frequency_hz: np.ndarray,
+    baseline: float,
+    amplitude: float,
+    center_hz: float,
+    q_factor: float,
+) -> np.ndarray:
+    """Near-resonance amplitude response of a lightly damped resonator."""
+    detuning = 2.0 * q_factor * (frequency_hz - center_hz) / center_hz
+    return baseline + amplitude / np.sqrt(1.0 + detuning * detuning)
+
+
+def fit_resonance_sweep(
+    frequency_hz: np.ndarray,
+    amplitude_v: np.ndarray,
+    phase_deg: np.ndarray,
+) -> dict[str, Any]:
+    """Fit center frequency/Q from R and phase-at-center from demodulator phase.
+
+    LabOne's Math tab describes the resonance analysis as a Lorentzian fit for
+    Demod R and an inverse-tangent fit for Demod Phase.  This implementation
+    uses the equivalent near-resonance resonator-amplitude response for R,
+    then fits the phase offset of an arctangent response using the resulting
+    center frequency and Q.
+    """
+    f = np.asarray(frequency_hz, dtype=float).reshape(-1)
+    r = np.asarray(amplitude_v, dtype=float).reshape(-1)
+    phi = np.asarray(phase_deg, dtype=float).reshape(-1)
+
+    finite = np.isfinite(f) & np.isfinite(r) & np.isfinite(phi)
+    f, r, phi = f[finite], r[finite], phi[finite]
+    if f.size < 12:
+        raise ValueError("Need at least 12 finite sweep points for a resonance fit.")
+
+    order = np.argsort(f)
+    f, r, phi = f[order], r[order], phi[order]
+    span = float(f[-1] - f[0])
+    if span <= 0:
+        raise ValueError("Sweep frequency span must be greater than zero.")
+
+    peak_index = int(np.argmax(r))
+    center_guess = float(f[peak_index])
+    baseline_guess = max(0.0, float(np.percentile(r, 10.0)))
+    peak_height = float(r[peak_index] - baseline_guess)
+    if peak_height <= max(np.finfo(float).eps, 1e-9 * max(abs(float(r[peak_index])), 1.0)):
+        raise ValueError("No resolvable amplitude resonance peak was found.")
+
+    # Estimate the 3 dB bandwidth from the amplitude half-power level.
+    half_power_level = baseline_guess + peak_height / math.sqrt(2.0)
+    left_cross = None
+    for i in range(peak_index - 1, -1, -1):
+        if r[i] <= half_power_level <= r[i + 1] or r[i] >= half_power_level >= r[i + 1]:
+            denom = r[i + 1] - r[i]
+            frac = 0.0 if denom == 0 else (half_power_level - r[i]) / denom
+            left_cross = float(f[i] + frac * (f[i + 1] - f[i]))
+            break
+    right_cross = None
+    for i in range(peak_index, f.size - 1):
+        if r[i] >= half_power_level >= r[i + 1] or r[i] <= half_power_level <= r[i + 1]:
+            denom = r[i + 1] - r[i]
+            frac = 0.0 if denom == 0 else (half_power_level - r[i]) / denom
+            right_cross = float(f[i] + frac * (f[i + 1] - f[i]))
+            break
+
+    if left_cross is not None and right_cross is not None and right_cross > left_cross:
+        bw_guess = right_cross - left_cross
+        q_guess = max(2.0, center_guess / bw_guess)
+    else:
+        q_guess = max(2.0, 5.0 * center_guess / span)
+
+    amplitude_guess = max(peak_height, np.finfo(float).eps)
+    r_max = max(float(np.max(r)), np.finfo(float).eps)
+    lower_bounds = [0.0, 0.0, float(f[0]), 1.0]
+    upper_bounds = [2.0 * r_max, 10.0 * r_max, float(f[-1]), 1e9]
+
+    popt, _ = curve_fit(
+        _resonator_amplitude_model,
+        f,
+        r,
+        p0=[baseline_guess, amplitude_guess, center_guess, q_guess],
+        bounds=(lower_bounds, upper_bounds),
+        maxfev=30000,
+    )
+    baseline, resonance_amplitude, center_hz, q_factor = map(float, popt)
+    if q_factor <= 0 or center_hz <= 0:
+        raise ValueError("Resonance fit returned non-physical center frequency or Q.")
+
+    bandwidth_hz = center_hz / q_factor
+    r_fit = _resonator_amplitude_model(f, *popt)
+    amplitude_range = max(float(np.ptp(r)), np.finfo(float).eps)
+    fit_error = float(np.sqrt(np.mean((r - r_fit) ** 2)) / amplitude_range)
+
+    # Unwrap phase for fitting. The sign is inferred from the measured phase
+    # slope so the same model works for either wiring/polarity convention.
+    phi_unwrapped = np.rad2deg(np.unwrap(np.deg2rad(phi)))
+    slope = float(np.polyfit(f, phi_unwrapped, 1)[0])
+    phase_sign = 1.0 if slope >= 0 else -1.0
+    phase_shape = phase_sign * np.rad2deg(
+        np.arctan(2.0 * q_factor * (f - center_hz) / center_hz)
+    )
+
+    # Weight the phase offset estimate toward the resonance where the signal
+    # amplitude and therefore phase SNR are best.
+    weights = np.maximum(r - baseline, 0.0)
+    if not np.any(weights > 0):
+        weights = np.ones_like(r)
+    phase_center_unwrapped = float(np.average(phi_unwrapped - phase_shape, weights=weights))
+    phase_fit_unwrapped = phase_center_unwrapped + phase_shape
+    phase_center_deg = float(_wrap_phase_deg(phase_center_unwrapped))
+    phase_fit_wrapped = np.asarray(_wrap_phase_deg(phase_fit_unwrapped), dtype=float)
+
+    phase_error_deg = float(
+        np.sqrt(np.average((phi_unwrapped - phase_fit_unwrapped) ** 2, weights=weights))
+    )
+
+    fit_frequency = np.linspace(float(f[0]), float(f[-1]), 1200)
+    fit_amplitude = _resonator_amplitude_model(
+        fit_frequency, baseline, resonance_amplitude, center_hz, q_factor
+    )
+    fit_phase_unwrapped = phase_center_unwrapped + phase_sign * np.rad2deg(
+        np.arctan(2.0 * q_factor * (fit_frequency - center_hz) / center_hz)
+    )
+    fit_phase = np.asarray(_wrap_phase_deg(fit_phase_unwrapped), dtype=float)
+
+    return {
+        "center_hz": center_hz,
+        "q_factor": q_factor,
+        "bandwidth_hz": bandwidth_hz,
+        "phase_deg": phase_center_deg,
+        "fit_error": fit_error,
+        "phase_fit_error_deg": phase_error_deg,
+        "fit_frequency_hz": fit_frequency,
+        "fit_amplitude_v": fit_amplitude,
+        "fit_phase_deg": fit_phase,
+    }
 
 
 @dataclass(frozen=True)
@@ -84,6 +237,10 @@ class MFLIWorker(QObject):
     amp_advisor_started = Signal()
     amp_advisor_finished = Signal(dict)
     amp_advisor_failed = Signal(str)
+    sweep_started = Signal()
+    sweep_progress = Signal(int, float)
+    sweep_finished = Signal(dict)
+    sweep_failed = Signal(str)
     warning = Signal(str)
 
     def __init__(self) -> None:
@@ -100,6 +257,8 @@ class MFLIWorker(QObject):
         self._last_amplitude_stream = 0.0
         self._last_lock_read = 0.0
         self._stream_nodes: dict[str, Any] = {}
+        self._sweep_abort = threading.Event()
+        self._sweep_running = False
 
     @Slot(str, str)
     def connect_instrument(self, host: str, serial: str) -> None:
@@ -566,6 +725,183 @@ class MFLIWorker(QObject):
                 f"Amplitude Advisor failed: {type(exc).__name__}: {exc}"
             )
 
+    @Slot(float, float, int, float, float, float)
+    def run_frequency_sweep(
+        self,
+        lower_offset_hz: float,
+        upper_offset_hz: float,
+        points: int,
+        period_s: float,
+        initial_settling_s: float,
+        center_hz: float,
+    ) -> None:
+        """Sweep Oscillator 1 frequency and record Demodulator 1 X/Y.
+
+        The sweep range is expressed as offsets relative to ``center_hz``.
+        ``period_s`` is used as the minimum averaging time per sweep point,
+        matching the Nanonis Frequency Sweep notion of a point period.
+        Existing Demodulator 1 filter settings are left untouched by using the
+        Sweeper Module's manual bandwidth-control mode.
+        """
+        if self.session is None or self.device is None:
+            self.sweep_failed.emit("Not connected.")
+            return
+        if self._sweep_running:
+            self.sweep_failed.emit("A frequency sweep is already running.")
+            return
+        if int(self.phase.enable()):
+            self.sweep_failed.emit(
+                "Disable the Phase Controller (PLL1) before a resonance sweep."
+            )
+            return
+        if int(self.amplitude.enable()):
+            self.sweep_failed.emit(
+                "Disable the Amplitude Controller (PID3) before a resonance sweep; "
+                "otherwise the amplitude loop would flatten the resonance."
+            )
+            return
+        if not int(self.signal_output.on()):
+            self.sweep_failed.emit("Enable Signal Output 1 before starting the sweep.")
+            return
+        if points < 16:
+            self.sweep_failed.emit("Use at least 16 sweep points.")
+            return
+        if upper_offset_hz <= lower_offset_hz:
+            self.sweep_failed.emit("Sweep Upper must be greater than Lower.")
+            return
+        if center_hz + lower_offset_hz <= 0:
+            self.sweep_failed.emit("Sweep start frequency must be greater than 0 Hz.")
+            return
+        if period_s < 0 or initial_settling_s < 0:
+            self.sweep_failed.emit("Period and initial settling time must be non-negative.")
+            return
+
+        self._sweep_running = True
+        self._sweep_abort.clear()
+        self.sweep_started.emit()
+
+        sweeper = None
+        sample_node = None
+        oscillator = self.device.oscs[0]
+        original_frequency = float(oscillator.freq())
+
+        try:
+            sweeper = self.session.modules.sweeper
+            sweeper.device(self.device)
+            sample_node = self.device.demods[0].sample
+
+            # Frequency sweep of Oscillator 1, recording Demodulator 1.
+            sweeper.gridnode(oscillator.freq)
+            sweeper.start(float(center_hz + lower_offset_hz))
+            sweeper.stop(float(center_hz + upper_offset_hz))
+            sweeper.samplecount(int(points))
+            sweeper.xmapping(0)          # linear frequency axis
+            sweeper.scan(0)              # sequential low -> high
+            sweeper.loopcount(1)
+            sweeper.phaseunwrap(1)
+
+            # Preserve the user's Demodulator 1 bandwidth/order settings.
+            sweeper.filtermode(1)         # advanced
+            sweeper.bandwidthcontrol(0)   # manual: leave demodulator untouched
+            sweeper.bandwidth(1.0)        # required >0 even though ignored in manual mode
+            sweeper.bandwidthoverlap(1)
+
+            # Wait for the existing lock-in filter to settle after each step,
+            # then average for at least the requested point period.
+            sweeper.settling.inaccuracy(0.01)
+            sweeper.settling.time(0.0)
+            sweeper.startdelay(float(initial_settling_s))
+            sweeper.averaging.time(float(period_s))
+            sweeper.averaging.tc(1.0)
+            sweeper.averaging.sample(1)
+
+            sweeper.subscribe(sample_node)
+            sweeper.execute()
+
+            while True:
+                try:
+                    progress = float(sweeper.progress())
+                except Exception:
+                    progress = 0.0
+                try:
+                    remaining = float(sweeper.remainingtime())
+                except Exception:
+                    remaining = float("nan")
+                self.sweep_progress.emit(
+                    max(0, min(100, int(round(progress * 100.0)))), remaining
+                )
+
+                if self._sweep_abort.is_set():
+                    sweeper.finish()
+                    raise InterruptedError("Frequency sweep stopped by user.")
+
+                try:
+                    finished = bool(sweeper.raw_module.finished())
+                except Exception:
+                    finished = progress >= 1.0
+                if finished or progress >= 1.0:
+                    break
+                time.sleep(0.10)
+
+            data = sweeper.read()
+            node_samples = data.get(sample_node)
+            if not node_samples:
+                raise RuntimeError("Sweeper returned no Demodulator 1 samples.")
+
+            record = node_samples[-1]
+            # Toolkit sweep results are typically [record_dict] per loop.
+            if isinstance(record, (list, tuple)):
+                if not record:
+                    raise RuntimeError("Sweeper returned an empty result record.")
+                record = record[0]
+
+            frequency = np.asarray(record["frequency"], dtype=float).reshape(-1)
+            x = np.asarray(record["x"], dtype=float).reshape(-1)
+            y = np.asarray(record["y"], dtype=float).reshape(-1)
+            if not (frequency.size == x.size == y.size) or frequency.size < 2:
+                raise RuntimeError("Unexpected Sweeper result dimensions.")
+
+            amplitude = np.hypot(x, y)
+            phase_deg = np.rad2deg(np.angle(x + 1j * y))
+
+            self.sweep_progress.emit(100, 0.0)
+            self.sweep_finished.emit(
+                {
+                    "center_hz": float(center_hz),
+                    "lower_offset_hz": float(lower_offset_hz),
+                    "upper_offset_hz": float(upper_offset_hz),
+                    "frequency_hz": frequency.tolist(),
+                    "amplitude_v": amplitude.tolist(),
+                    "phase_deg": phase_deg.tolist(),
+                }
+            )
+
+        except InterruptedError as exc:
+            self.sweep_failed.emit(str(exc))
+        except Exception as exc:
+            self.sweep_failed.emit(
+                f"Frequency sweep failed: {type(exc).__name__}: {exc}"
+            )
+        finally:
+            if sweeper is not None and sample_node is not None:
+                try:
+                    sweeper.unsubscribe(sample_node)
+                except Exception:
+                    pass
+            try:
+                oscillator.freq(original_frequency, deep=True)
+            except Exception as exc:
+                self.warning.emit(
+                    f"Could not restore oscillator frequency after sweep: {exc}"
+                )
+            self._sweep_running = False
+            self._sweep_abort.clear()
+
+    @Slot()
+    def request_stop_frequency_sweep(self) -> None:
+        """Thread-safe stop request; actual Sweeper.finish() runs in worker thread."""
+        self._sweep_abort.set()
+
     @Slot()
     def _poll_once(self) -> None:
         if self.session is None or self.device is None:
@@ -659,6 +995,274 @@ def load_ui(path: Path) -> QMainWindow:
     return window
 
 
+class FrequencySweepWindow(QObject):
+    """Nanonis-style resonance sweep sub-window."""
+
+    start_requested = Signal(float, float, int, float, float, float)
+    stop_requested = Signal()
+    apply_requested = Signal(dict)
+
+    def __init__(self, ui_path: Path) -> None:
+        super().__init__()
+        self.window = load_ui(ui_path)
+        self._last_fit: dict[str, Any] | None = None
+        self._range_initialized = False
+        self._bind_widgets()
+        self._configure_widgets()
+        self._build_plots()
+        self._connect_signals()
+
+    def widget(self, cls: type[T], name: str) -> T:
+        obj = self.window.findChild(cls, name)
+        if obj is None:
+            raise RuntimeError(
+                f"Required sweep widget {name!r} ({cls.__name__}) was not found in "
+                f"{SWEEP_UI_FILENAME}."
+            )
+        return obj
+
+    def _bind_widgets(self) -> None:
+        self.current_shift = self.widget(NanonisSpinBox, "currentShiftValue")
+        self.center_value = self.widget(NanonisSpinBox, "centerValue")
+        self.lower_offset = self.widget(NanonisSpinBox, "lowerOffset")
+        self.upper_offset = self.widget(NanonisSpinBox, "upperOffset")
+        self.points = self.widget(QSpinBox, "pointsSpinBox")
+        self.period = self.widget(NanonisSpinBox, "periodSpinBox")
+        self.initial_settling = self.widget(NanonisSpinBox, "initialSettlingSpinBox")
+        self.start_button = self.widget(QPushButton, "startButton")
+        self.stop_button = self.widget(QPushButton, "stopButton")
+        self.progress = self.widget(QProgressBar, "progressBar")
+        self.status_label = self.widget(QLabel, "sweepStatusLabel")
+
+        self.fit_center = self.widget(NanonisSpinBox, "fitCenterValue")
+        self.fit_q = self.widget(NanonisSpinBox, "fitQValue")
+        self.fit_bw = self.widget(NanonisSpinBox, "fitBwValue")
+        self.fit_phase = self.widget(NanonisSpinBox, "fitPhaseValue")
+        self.fit_error = self.widget(NanonisSpinBox, "fitErrorValue")
+        self.apply_button = self.widget(QPushButton, "applyFitButton")
+
+        self.amplitude_plot_container = self.widget(QWidget, "amplitudePlotContainer")
+        self.phase_plot_container = self.widget(QWidget, "phasePlotContainer")
+
+    def _configure_widgets(self) -> None:
+        editable = (
+            (self.lower_offset, "Hz"),
+            (self.upper_offset, "Hz"),
+            (self.period, "s"),
+            (self.initial_settling, "s"),
+        )
+        readbacks = (
+            (self.current_shift, "Hz"),
+            (self.center_value, "Hz"),
+            (self.fit_center, "Hz"),
+            (self.fit_q, ""),
+            (self.fit_bw, "Hz"),
+            (self.fit_phase, "deg"),
+            (self.fit_error, ""),
+        )
+        for control, unit in editable:
+            control.setBaseUnit(unit)
+            control.setDisplayDecimals(6)
+        readback_style = (
+            "QDoubleSpinBox {"
+            " background-color: rgb(238, 238, 238);"
+            " color: palette(text);"
+            " border: 1px solid palette(mid);"
+            " padding: 1px 3px;"
+            "}"
+        )
+        for control, unit in readbacks:
+            control.setBaseUnit(unit)
+            control.setDisplayDecimals(6)
+            control.setReadOnly(True)
+            control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            control.setStyleSheet(readback_style)
+
+    def _build_plots(self) -> None:
+        self.amplitude_figure = Figure(figsize=(7, 3), tight_layout=True)
+        self.amplitude_canvas = FigureCanvas(self.amplitude_figure)
+        self.amplitude_axis = self.amplitude_figure.add_subplot(111)
+        self.amplitude_plot_container.layout().addWidget(self.amplitude_canvas)
+
+        self.phase_figure = Figure(figsize=(7, 3), tight_layout=True)
+        self.phase_canvas = FigureCanvas(self.phase_figure)
+        self.phase_axis = self.phase_figure.add_subplot(111)
+        self.phase_plot_container.layout().addWidget(self.phase_canvas)
+
+        self._clear_plots()
+
+    def _clear_plots(self) -> None:
+        self.amplitude_axis.clear()
+        self.amplitude_axis.set_xlabel("Frequency Shift (Hz)")
+        self.amplitude_axis.set_ylabel("Demod 1 R (V RMS)")
+        self.amplitude_axis.grid(True, alpha=0.3)
+        self.phase_axis.clear()
+        self.phase_axis.set_xlabel("Frequency Shift (Hz)")
+        self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
+        self.phase_axis.grid(True, alpha=0.3)
+        self.amplitude_canvas.draw_idle()
+        self.phase_canvas.draw_idle()
+
+    def _connect_signals(self) -> None:
+        self.start_button.clicked.connect(self._start)
+        self.stop_button.clicked.connect(self.stop_requested.emit)
+        self.apply_button.clicked.connect(self._apply_fit)
+
+    def prepare(
+        self,
+        center_hz: float,
+        current_shift_hz: float,
+        default_lower_hz: float,
+        default_upper_hz: float,
+        connected: bool,
+    ) -> None:
+        self.center_value.setValue(float(center_hz))
+        self.current_shift.setValue(float(current_shift_hz))
+        if not self._range_initialized:
+            if default_lower_hz < default_upper_hz:
+                self.lower_offset.setValue(float(default_lower_hz))
+                self.upper_offset.setValue(float(default_upper_hz))
+            self._range_initialized = True
+        self.start_button.setEnabled(bool(connected))
+        if connected:
+            self.status_label.setText(
+                "PLL1 and PID3 must be disabled; Signal Output 1 must be enabled."
+            )
+
+    def update_center(self, center_hz: float) -> None:
+        self.center_value.setValue(float(center_hz))
+
+    def update_current_shift(self, shift_hz: float) -> None:
+        self.current_shift.setValue(float(shift_hz))
+
+    def _start(self) -> None:
+        lower = float(self.lower_offset.value())
+        upper = float(self.upper_offset.value())
+        center = float(self.center_value.value())
+        period = float(self.period.value())
+        settling = float(self.initial_settling.value())
+        points = int(self.points.value())
+
+        if upper <= lower:
+            self.status_label.setText("Upper sweep limit must be greater than Lower.")
+            return
+        if center + lower <= 0:
+            self.status_label.setText("Sweep start frequency must be greater than 0 Hz.")
+            return
+
+        self._last_fit = None
+        self.apply_button.setEnabled(False)
+        self.progress.setValue(0)
+        self.status_label.setText("Starting frequency sweep...")
+        self.start_requested.emit(lower, upper, points, period, settling, center)
+
+    def _apply_fit(self) -> None:
+        if self._last_fit is not None:
+            self.apply_requested.emit(dict(self._last_fit))
+
+    @Slot()
+    def on_sweep_started(self) -> None:
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        self.apply_button.setEnabled(False)
+        self.status_label.setText("Sweeping Oscillator 1; recording Demodulator 1 R/Phase...")
+
+    @Slot(int, float)
+    def on_sweep_progress(self, progress: int, remaining_s: float) -> None:
+        self.progress.setValue(int(progress))
+        if math.isfinite(remaining_s) and remaining_s >= 0:
+            self.status_label.setText(
+                f"Frequency sweep in progress — approximately {remaining_s:.1f} s remaining."
+            )
+
+    @Slot(dict)
+    def on_sweep_finished(self, data: dict) -> None:
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.progress.setValue(100)
+
+        frequency = np.asarray(data["frequency_hz"], dtype=float)
+        amplitude = np.asarray(data["amplitude_v"], dtype=float)
+        phase = np.asarray(data["phase_deg"], dtype=float)
+        center_used = float(data["center_hz"])
+
+        try:
+            fit = fit_resonance_sweep(frequency, amplitude, phase)
+        except Exception as exc:
+            self._last_fit = None
+            self.apply_button.setEnabled(False)
+            self.status_label.setText(
+                f"Sweep complete, but resonance fit failed: {type(exc).__name__}: {exc}"
+            )
+            self._plot_data(frequency, amplitude, phase, center_used, None)
+            return
+
+        self._last_fit = fit
+        self.fit_center.setValue(float(fit["center_hz"]))
+        self.fit_q.setValue(float(fit["q_factor"]))
+        self.fit_bw.setValue(float(fit["bandwidth_hz"]))
+        self.fit_phase.setValue(float(fit["phase_deg"]))
+        self.fit_error.setValue(float(fit["fit_error"]))
+        self.apply_button.setEnabled(True)
+        self._plot_data(frequency, amplitude, phase, center_used, fit)
+        self.status_label.setText(
+            "Sweep and resonance fit complete. Review the curves, then Apply Fit "
+            "to copy Q, center frequency and phase reference to Oscillation Control."
+        )
+
+    @Slot(str)
+    def on_sweep_failed(self, message: str) -> None:
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.status_label.setText(message)
+
+    def _plot_data(
+        self,
+        frequency: np.ndarray,
+        amplitude: np.ndarray,
+        phase: np.ndarray,
+        sweep_center: float,
+        fit: dict[str, Any] | None,
+    ) -> None:
+        shift = frequency - sweep_center
+
+        self.amplitude_axis.clear()
+        self.amplitude_axis.plot(shift, amplitude, label="Demod 1 R")
+        self.amplitude_axis.set_xlabel("Frequency Shift (Hz)")
+        self.amplitude_axis.set_ylabel("Demod 1 R (V RMS)")
+        self.amplitude_axis.grid(True, alpha=0.3)
+
+        self.phase_axis.clear()
+        self.phase_axis.plot(shift, phase, label="Demod 1 Phase")
+        self.phase_axis.set_xlabel("Frequency Shift (Hz)")
+        self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
+        self.phase_axis.grid(True, alpha=0.3)
+
+        if fit is not None:
+            fit_frequency = np.asarray(fit["fit_frequency_hz"], dtype=float)
+            fit_shift = fit_frequency - sweep_center
+            self.amplitude_axis.plot(
+                fit_shift,
+                np.asarray(fit["fit_amplitude_v"], dtype=float),
+                linestyle="--",
+                label="Resonance fit",
+            )
+            self.phase_axis.plot(
+                fit_shift,
+                np.asarray(fit["fit_phase_deg"], dtype=float),
+                linestyle="--",
+                label="Phase fit",
+            )
+            center_shift = float(fit["center_hz"]) - sweep_center
+            self.amplitude_axis.axvline(center_shift, linestyle=":")
+            self.phase_axis.axvline(center_shift, linestyle=":")
+            self.amplitude_axis.legend(loc="best")
+            self.phase_axis.legend(loc="best")
+
+        self.amplitude_canvas.draw_idle()
+        self.phase_canvas.draw_idle()
+
+
 class OscillationControlApp(QObject):
     """
     Controller/glue layer for the Designer UI.
@@ -672,6 +1276,8 @@ class OscillationControlApp(QObject):
     center_requested = Signal()
     advise_requested = Signal(float, float, float, float)
     amp_advise_requested = Signal(float, float, float, float, float)
+    sweep_requested = Signal(float, float, int, float, float, float)
+    sweep_stop_requested = Signal()
     set_requested = Signal(str, object)
     shutdown_requested = Signal()
 
@@ -681,6 +1287,7 @@ class OscillationControlApp(QObject):
         self.config_path = ui_path.with_name(CONNECTION_CONFIG_FILENAME)
         self._updating_from_device = False
         self._shutting_down = False
+        self.sweep_window: FrequencySweepWindow | None = None
 
         self._bind_widgets()
         self._load_connection_settings()
@@ -708,6 +1315,7 @@ class OscillationControlApp(QObject):
         # Output / frequency-generator controls
         self.signal_output_enable = self.widget(QCheckBox, "signalOutputEnable")
         self.center_button = self.widget(QPushButton, "centerButton")
+        self.sweep_button = self.widget(QPushButton, "sweepButton")
         self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
         self.phase_lower = self.widget(NanonisSpinBox, "phaseLower")
         self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
@@ -857,6 +1465,7 @@ class OscillationControlApp(QObject):
         self.connect_button.clicked.connect(self._connect_with_saved_settings)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.center_button.clicked.connect(self.center_requested.emit)
+        self.sweep_button.clicked.connect(self._open_frequency_sweep)
         self.amp_advise_button.clicked.connect(self._request_amplitude_advice)
         self.advise_button.clicked.connect(self._request_phase_advice)
 
@@ -908,6 +1517,61 @@ class OscillationControlApp(QObject):
         self.amp_upper.valueChanged.connect(
             lambda v: self._emit_if_user("amp_upper_v", v)
         )
+
+    def _ensure_frequency_sweep_window(self) -> FrequencySweepWindow:
+        if self.sweep_window is None:
+            ui_path = Path(__file__).resolve().with_name(SWEEP_UI_FILENAME)
+            self.sweep_window = FrequencySweepWindow(ui_path)
+            self.sweep_window.start_requested.connect(self.sweep_requested.emit)
+            self.sweep_window.stop_requested.connect(self.sweep_stop_requested.emit)
+            self.sweep_window.apply_requested.connect(self._apply_sweep_fit)
+
+            self.worker.sweep_started.connect(self.sweep_window.on_sweep_started)
+            self.worker.sweep_progress.connect(self.sweep_window.on_sweep_progress)
+            self.worker.sweep_finished.connect(self.sweep_window.on_sweep_finished)
+            self.worker.sweep_failed.connect(self.sweep_window.on_sweep_failed)
+        return self.sweep_window
+
+    def _open_frequency_sweep(self) -> None:
+        sweep = self._ensure_frequency_sweep_window()
+        connected = not self.connect_button.isEnabled()
+        sweep.prepare(
+            center_hz=float(self.phase_center.value()),
+            current_shift_hz=float(self.phase_shift_label.value()),
+            default_lower_hz=float(self.phase_lower.value()),
+            default_upper_hz=float(self.phase_upper.value()),
+            connected=connected,
+        )
+        sweep.window.show()
+        sweep.window.raise_()
+        sweep.window.activateWindow()
+
+    @Slot(dict)
+    def _apply_sweep_fit(self, fit: dict) -> None:
+        """Copy resonance fit results into the main oscillation-control fields."""
+        if self.phase_enable.isChecked() or self.amp_enable.isChecked():
+            self.statusbar.showMessage(
+                "Disable the Phase and Amplitude controllers before applying a resonance fit.",
+                12000,
+            )
+            return
+
+        q_factor = float(fit["q_factor"])
+        center_hz = float(fit["center_hz"])
+        phase_deg = float(fit["phase_deg"])
+
+        # advisorQ is local UI state. Center and phase reference use their
+        # normal valueChanged paths, so they are also written to the MFLI.
+        self.advisor_q.setValue(q_factor)
+        self.phase_center.setValue(center_hz)
+        self.phase_setpoint.setValue(phase_deg)
+        self.statusbar.showMessage(
+            f"Resonance fit applied: f0={center_hz:.9g} Hz, Q={q_factor:.7g}, "
+            f"phase={phase_deg:.5g} deg.",
+            15000,
+        )
+        if self.sweep_window is not None:
+            self.sweep_window.update_center(center_hz)
 
     def _request_phase_advice(self) -> None:
         """Validate the Nanonis-style advisor fields and start PLL1 advising."""
@@ -1015,6 +1679,13 @@ class OscillationControlApp(QObject):
         self.center_requested.connect(self.worker.center_phase_frequency)
         self.advise_requested.connect(self.worker.advise_phase_pll)
         self.amp_advise_requested.connect(self.worker.advise_amplitude_pid)
+        self.sweep_requested.connect(self.worker.run_frequency_sweep)
+        # DirectConnection is safe here because this slot only sets a
+        # threading.Event; all MFLI/Sweeper calls remain in the worker thread.
+        self.sweep_stop_requested.connect(
+            self.worker.request_stop_frequency_sweep,
+            Qt.ConnectionType.DirectConnection,
+        )
         self.set_requested.connect(self.worker.set_parameter)
         self.shutdown_requested.connect(self.worker.shutdown)
 
@@ -1041,6 +1712,7 @@ class OscillationControlApp(QObject):
     def _on_connected(self, cfg: dict) -> None:
         self.refresh_button.setEnabled(True)
         self.center_button.setEnabled(True)
+        self.sweep_button.setEnabled(True)
         self.amp_advise_button.setEnabled(True)
         self.advise_button.setEnabled(True)
         self.connect_button.setEnabled(False)
@@ -1118,6 +1790,8 @@ class OscillationControlApp(QObject):
             self.phase_p.setValue(float(s["phase_p"]))
             self.phase_i.setValue(float(s["phase_i"]))
             self.phase_center.setValue(float(s["phase_center_hz"]))
+            if self.sweep_window is not None:
+                self.sweep_window.update_center(float(s["phase_center_hz"]))
             self.phase_lower.setValue(float(s["phase_lower_hz"]))
             self.phase_upper.setValue(float(s["phase_upper_hz"]))
 
@@ -1144,7 +1818,10 @@ class OscillationControlApp(QObject):
             # MFLI defines Error = Setpoint - Input.
             self.phase_measured.setValue(self.phase_setpoint.value() - phase_error)
         if "phase_shift" in d:
-            self.phase_shift_label.setValue(float(d["phase_shift"]))
+            phase_shift = float(d["phase_shift"])
+            self.phase_shift_label.setValue(phase_shift)
+            if self.sweep_window is not None:
+                self.sweep_window.update_current_shift(phase_shift)
         if "phase_value" in d:
             self.phase_value_label.setValue(float(d["phase_value"]))
         if "phase_locked" in d:

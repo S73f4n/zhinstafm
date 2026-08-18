@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FrequencySweepWindow</class>
+ <widget class="QMainWindow" name="FrequencySweepWindow">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>1180</width><height>670</height></rect>
+  </property>
+  <property name="windowTitle"><string>Frequency Sweep</string></property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <property name="leftMargin"><number>7</number></property>
+    <property name="topMargin"><number>7</number></property>
+    <property name="rightMargin"><number>7</number></property>
+    <property name="bottomMargin"><number>7</number></property>
+    <property name="spacing"><number>8</number></property>
+    <item>
+     <widget class="QWidget" name="leftPanel" native="true">
+      <property name="minimumSize"><size><width>315</width><height>0</height></size></property>
+      <property name="maximumSize"><size><width>365</width><height>16777215</height></size></property>
+      <layout class="QVBoxLayout" name="leftLayout">
+       <property name="leftMargin"><number>0</number></property>
+       <property name="topMargin"><number>0</number></property>
+       <property name="rightMargin"><number>0</number></property>
+       <property name="bottomMargin"><number>0</number></property>
+       <property name="spacing"><number>7</number></property>
+       <item>
+        <widget class="QGroupBox" name="sweepGroup">
+         <property name="title"><string>Frequency Sweep</string></property>
+         <layout class="QGridLayout" name="sweepGrid">
+          <property name="horizontalSpacing"><number>6</number></property>
+          <property name="verticalSpacing"><number>4</number></property>
+          <item row="0" column="0"><widget class="QLabel" name="currentShiftLabel"><property name="text"><string>Frequency Shift (Hz)</string></property></widget></item>
+          <item row="0" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="currentShiftValue">
+            <property name="minimum"><double>-1000000000</double></property>
+            <property name="maximum"><double>1000000000</double></property>
+            <property name="decimals"><number>12</number></property>
+            <property name="readOnly"><bool>true</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="1" column="0"><widget class="QLabel" name="centerLabel"><property name="text"><string>Center Freq. (Hz)</string></property></widget></item>
+          <item row="1" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="centerValue">
+            <property name="minimum"><double>0</double></property>
+            <property name="maximum"><double>10000000000</double></property>
+            <property name="decimals"><number>12</number></property>
+            <property name="readOnly"><bool>true</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="2" column="0"><widget class="QLabel" name="lowerLabel"><property name="text"><string>Lower (Hz)</string></property></widget></item>
+          <item row="2" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="lowerOffset">
+            <property name="minimum"><double>-1000000000</double></property>
+            <property name="maximum"><double>1000000000</double></property>
+            <property name="value"><double>-1000</double></property>
+            <property name="decimals"><number>12</number></property>
+            <property name="keyboardTracking"><bool>false</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="3" column="0"><widget class="QLabel" name="upperLabel"><property name="text"><string>Upper (Hz)</string></property></widget></item>
+          <item row="3" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="upperOffset">
+            <property name="minimum"><double>-1000000000</double></property>
+            <property name="maximum"><double>1000000000</double></property>
+            <property name="value"><double>1000</double></property>
+            <property name="decimals"><number>12</number></property>
+            <property name="keyboardTracking"><bool>false</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="4" column="0"><widget class="QLabel" name="pointsLabel"><property name="text"><string>Points</string></property></widget></item>
+          <item row="4" column="1" colspan="2">
+           <widget class="QSpinBox" name="pointsSpinBox">
+            <property name="minimum"><number>16</number></property>
+            <property name="maximum"><number>10000</number></property>
+            <property name="value"><number>256</number></property>
+           </widget>
+          </item>
+          <item row="5" column="0"><widget class="QLabel" name="periodLabel"><property name="text"><string>Period (s)</string></property></widget></item>
+          <item row="5" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="periodSpinBox">
+            <property name="minimum"><double>0</double></property>
+            <property name="maximum"><double>1000</double></property>
+            <property name="value"><double>0.1</double></property>
+            <property name="decimals"><number>15</number></property>
+            <property name="keyboardTracking"><bool>false</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="6" column="0"><widget class="QLabel" name="settlingLabel"><property name="text"><string>Initial Settling Time (s)</string></property></widget></item>
+          <item row="6" column="1" colspan="2">
+           <widget class="NanonisSpinBox" name="initialSettlingSpinBox">
+            <property name="minimum"><double>0</double></property>
+            <property name="maximum"><double>1000</double></property>
+            <property name="value"><double>0.01</double></property>
+            <property name="decimals"><number>15</number></property>
+            <property name="keyboardTracking"><bool>false</bool></property>
+            <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="7" column="0" colspan="3">
+           <layout class="QHBoxLayout" name="runLayout">
+            <item><widget class="QPushButton" name="startButton"><property name="enabled"><bool>false</bool></property><property name="text"><string>▶ Start</string></property></widget></item>
+            <item><widget class="QPushButton" name="stopButton"><property name="enabled"><bool>false</bool></property><property name="text"><string>■ Stop</string></property></widget></item>
+           </layout>
+          </item>
+          <item row="8" column="0" colspan="3">
+           <widget class="QProgressBar" name="progressBar"><property name="value"><number>0</number></property><property name="format"><string>%p%</string></property></widget>
+          </item>
+          <item row="9" column="0" colspan="3"><widget class="QLabel" name="sweepStatusLabel"><property name="text"><string>Connect the MFLI to enable sweeping.</string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="fitGroup">
+         <property name="title"><string>Resonance Fit</string></property>
+         <layout class="QGridLayout" name="fitGrid">
+          <item row="0" column="0"><widget class="QLabel" name="fitCenterLabel"><property name="text"><string>Res. Freq. (Hz)</string></property></widget></item>
+          <item row="0" column="1"><widget class="NanonisSpinBox" name="fitCenterValue"><property name="minimum"><double>0</double></property><property name="maximum"><double>10000000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+          <item row="1" column="0"><widget class="QLabel" name="fitQLabel"><property name="text"><string>Q</string></property></widget></item>
+          <item row="1" column="1"><widget class="NanonisSpinBox" name="fitQValue"><property name="minimum"><double>0</double></property><property name="maximum"><double>1000000000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+          <item row="2" column="0"><widget class="QLabel" name="fitBwLabel"><property name="text"><string>BW (Hz)</string></property></widget></item>
+          <item row="2" column="1"><widget class="NanonisSpinBox" name="fitBwValue"><property name="minimum"><double>0</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+          <item row="3" column="0"><widget class="QLabel" name="fitPhaseLabel"><property name="text"><string>Phase (deg)</string></property></widget></item>
+          <item row="3" column="1"><widget class="NanonisSpinBox" name="fitPhaseValue"><property name="minimum"><double>-360</double></property><property name="maximum"><double>360</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+          <item row="4" column="0"><widget class="QLabel" name="fitErrorLabel"><property name="text"><string>Fit Error</string></property></widget></item>
+          <item row="4" column="1"><widget class="NanonisSpinBox" name="fitErrorValue"><property name="minimum"><double>0</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+          <item row="5" column="0" colspan="2"><widget class="QPushButton" name="applyFitButton"><property name="enabled"><bool>false</bool></property><property name="text"><string>Apply Fit → Oscillation Control</string></property></widget></item>
+         </layout>
+        </widget>
+       </item>
+       <item><spacer name="leftSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint"><size><width>20</width><height>40</height></size></property></spacer></item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QSplitter" name="plotSplitter">
+      <property name="orientation"><enum>Qt::Vertical</enum></property>
+      <widget class="QWidget" name="amplitudePlotContainer" native="true"><layout class="QVBoxLayout" name="amplitudePlotLayout"><property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property></layout></widget>
+      <widget class="QWidget" name="phasePlotContainer" native="true"><layout class="QVBoxLayout" name="phasePlotLayout"><property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property></layout></widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <customwidgets>
+  <customwidget><class>NanonisSpinBox</class><extends>QDoubleSpinBox</extends><header>nanonis_spinbox.py</header></customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

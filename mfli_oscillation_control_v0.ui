@@ -454,6 +454,12 @@
               </property>
              </widget>
             </item>
+            <item row="5" column="0" colspan="3">
+             <widget class="QPushButton" name="sweepButton">
+              <property name="enabled"><bool>false</bool></property>
+              <property name="text"><string>Frequency Sweep...</string></property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
