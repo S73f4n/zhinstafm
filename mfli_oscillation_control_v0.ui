@@ -1,824 +1,120 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>OscillationControlWindow</class>
  <widget class="QMainWindow" name="OscillationControlWindow">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>930</width>
-    <height>520</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>MFLI Oscillation Control</string>
-  </property>
+  <property name="geometry"><rect><x>0</x><y>0</y><width>920</width><height>575</height></rect></property>
+  <property name="windowTitle"><string>MFLI Oscillation Control</string></property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="leftMargin"><number>7</number></property>
+    <property name="topMargin"><number>7</number></property>
+    <property name="rightMargin"><number>7</number></property>
+    <property name="bottomMargin"><number>7</number></property>
+    <property name="spacing"><number>6</number></property>
     <item>
      <widget class="QGroupBox" name="connectionGroup">
-      <property name="title">
-       <string>LabOne connection</string>
-      </property>
+      <property name="title"><string>LabOne connection</string></property>
       <layout class="QHBoxLayout" name="connectionLayout">
-       <item>
-        <widget class="QLabel" name="hostLabel">
-         <property name="text">
-          <string>Data Server:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLineEdit" name="hostEdit">
-         <property name="text">
-          <string>localhost</string>
-         </property>
-         <property name="placeholderText">
-          <string>localhost or MFLI IP address</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="serialLabel">
-         <property name="text">
-          <string>Device:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLineEdit" name="serialEdit">
-         <property name="placeholderText">
-          <string>DEV1234</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="connectButton">
-         <property name="text">
-          <string>Connect</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="refreshButton">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Refresh</string>
-         </property>
-        </widget>
-       </item>
+       <item><widget class="QLabel" name="hostLabel"><property name="text"><string>Data Server:</string></property></widget></item>
+       <item><widget class="QLineEdit" name="hostEdit"><property name="text"><string>localhost</string></property><property name="placeholderText"><string>localhost or MFLI IP</string></property></widget></item>
+       <item><widget class="QLabel" name="serialLabel"><property name="text"><string>Device:</string></property></widget></item>
+       <item><widget class="QLineEdit" name="serialEdit"><property name="placeholderText"><string>DEV1234</string></property></widget></item>
+       <item><widget class="QPushButton" name="connectButton"><property name="text"><string>Connect</string></property></widget></item>
+       <item><widget class="QPushButton" name="refreshButton"><property name="enabled"><bool>false</bool></property><property name="text"><string>Refresh</string></property></widget></item>
       </layout>
      </widget>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="controllerLayout">
-      <item>
-       <widget class="QGroupBox" name="phaseGroup">
-        <property name="title">
-         <string>Phase / Frequency Controller — LabOne PLL 1</string>
-        </property>
-        <layout class="QFormLayout" name="phaseForm">
-         <item row="0" column="0">
-          <widget class="QLabel" name="phaseControllerLabel">
-           <property name="text">
-            <string>Controller</string>
-           </property>
+     <layout class="QGridLayout" name="mainGrid">
+      <property name="horizontalSpacing"><number>8</number></property>
+      <property name="verticalSpacing"><number>6</number></property>
+      <item row="0" column="0">
+       <widget class="QWidget" name="leftColumn" native="true">
+        <layout class="QVBoxLayout" name="leftColumnLayout">
+         <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+         <item>
+          <widget class="QGroupBox" name="outputGroup">
+           <property name="title"><string>Output</string></property>
+           <layout class="QGridLayout" name="outputGrid">
+            <item row="0" column="0" colspan="2"><widget class="QCheckBox" name="signalOutputEnable"><property name="text"><string>Signal Output 1 Enable</string></property></widget></item>
+            <item row="1" column="0"><widget class="QLabel" name="ampValueTitle"><property name="text"><string>Output Amplitude (Vpk)</string></property></widget></item>
+            <item row="1" column="1"><widget class="NanonisSpinBox" name="ampValueValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="2" column="0"><widget class="QLabel" name="ampShiftTitle"><property name="text"><string>Output Shift (V)</string></property></widget></item>
+            <item row="2" column="1"><widget class="NanonisSpinBox" name="ampShiftValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="3" column="0"><widget class="QLabel" name="ampCenterLabel"><property name="text"><string>Output Center (V)</string></property></widget></item>
+            <item row="3" column="1"><widget class="NanonisSpinBox" name="ampCenter"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="4" column="0"><widget class="QLabel" name="ampLowerLabel"><property name="text"><string>Lower Limit (V)</string></property></widget></item>
+            <item row="4" column="1"><widget class="NanonisSpinBox" name="ampLower"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="5" column="0"><widget class="QLabel" name="ampUpperLabel"><property name="text"><string>Upper Limit (V)</string></property></widget></item>
+            <item row="5" column="1"><widget class="NanonisSpinBox" name="ampUpper"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="6" column="0"><widget class="QLabel" name="ampActualMinTitle"><property name="text"><string>Actual Min. (Vpk)</string></property></widget></item>
+            <item row="6" column="1"><widget class="NanonisSpinBox" name="ampActualMinValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="7" column="0"><widget class="QLabel" name="ampActualMaxTitle"><property name="text"><string>Actual Max. (Vpk)</string></property></widget></item>
+            <item row="7" column="1"><widget class="NanonisSpinBox" name="ampActualMaxValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+           </layout>
           </widget>
          </item>
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="phaseEnable">
-           <property name="text">
-            <string>Enabled</string>
-           </property>
+         <item>
+          <widget class="QGroupBox" name="freqGeneratorGroup">
+           <property name="title"><string>Freq. Generator</string></property>
+           <layout class="QGridLayout" name="freqGrid">
+            <item row="0" column="0"><widget class="QLabel" name="phaseCenterLabel"><property name="text"><string>Center Freq. (Hz)</string></property></widget></item>
+            <item row="0" column="1"><widget class="NanonisSpinBox" name="phaseCenter"><property name="minimum"><double>0</double></property><property name="maximum"><double>10000000000</double></property><property name="decimals"><number>9</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="0" column="2"><widget class="QPushButton" name="centerButton"><property name="enabled"><bool>false</bool></property><property name="text"><string>Center</string></property></widget></item>
+            <item row="1" column="0"><widget class="QLabel" name="phaseShiftTitle"><property name="text"><string>Freq. Shift (Hz)</string></property></widget></item>
+            <item row="1" column="1" colspan="2"><widget class="NanonisSpinBox" name="phaseShiftValue"><property name="minimum"><double>-1000000000</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>9</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="2" column="0"><widget class="QLabel" name="phaseValueTitle"><property name="text"><string>Actual Freq. (Hz)</string></property></widget></item>
+            <item row="2" column="1" colspan="2"><widget class="NanonisSpinBox" name="phaseValueValue"><property name="minimum"><double>0</double></property><property name="maximum"><double>10000000000</double></property><property name="decimals"><number>9</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="3" column="0"><widget class="QLabel" name="phaseLowerLabel"><property name="text"><string>Shift Lower (Hz)</string></property></widget></item>
+            <item row="3" column="1" colspan="2"><widget class="NanonisSpinBox" name="phaseLower"><property name="minimum"><double>-1000000000</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>9</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+            <item row="4" column="0"><widget class="QLabel" name="phaseUpperLabel"><property name="text"><string>Shift Upper (Hz)</string></property></widget></item>
+            <item row="4" column="1" colspan="2"><widget class="NanonisSpinBox" name="phaseUpper"><property name="minimum"><double>-1000000000</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>9</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+           </layout>
           </widget>
          </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="phaseSetpointLabel">
-           <property name="text">
-            <string>Phase setpoint</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="NanonisSpinBox" name="phaseSetpoint">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>-360.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>360.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="phasePLabel">
-           <property name="text">
-            <string>P (Hz/deg)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="NanonisSpinBox" name="phaseP">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>9</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.010000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0">
-          <widget class="QLabel" name="phaseILabel">
-           <property name="text">
-            <string>I (Hz/(deg·s))</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="NanonisSpinBox" name="phaseI">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>1.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="phaseCenterLabel">
-           <property name="text">
-            <string>Frequency center (Hz)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="NanonisSpinBox" name="phaseCenter">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>0.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>10000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>1.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QLabel" name="phaseLowerLabel">
-           <property name="text">
-            <string>Lower limit (Hz)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="1">
-          <widget class="NanonisSpinBox" name="phaseLower">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>1.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="0">
-          <widget class="QLabel" name="phaseUpperLabel">
-           <property name="text">
-            <string>Upper limit (Hz)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="1">
-          <widget class="NanonisSpinBox" name="phaseUpper">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>1.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="0">
-          <widget class="QLabel" name="phaseErrorTitle">
-           <property name="text">
-            <string>Phase error (deg)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="1">
-          <widget class="NanonisSpinBox" name="phaseErrorValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>9</number>
-           </property>
-           <property name="minimum">
-            <double>-360.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>360.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="0">
-          <widget class="QLabel" name="phaseShiftTitle">
-           <property name="text">
-            <string>Frequency shift (Hz)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="1">
-          <widget class="NanonisSpinBox" name="phaseShiftValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>9</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="9" column="0">
-          <widget class="QLabel" name="phaseValueTitle">
-           <property name="text">
-            <string>Actual frequency (Hz)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="9" column="1">
-          <widget class="NanonisSpinBox" name="phaseValueValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>9</number>
-           </property>
-           <property name="minimum">
-            <double>0.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>10000000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="10" column="0">
-          <widget class="QLabel" name="phaseLockTitle">
-           <property name="text">
-            <string>PLL lock</string>
-           </property>
-          </widget>
-         </item>
-         <item row="10" column="1">
-          <widget class="QLabel" name="phaseLockValue">
-           <property name="text">
-            <string>—</string>
-           </property>
-          </widget>
-         </item>
+         <item><spacer name="leftSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint"><size><width>20</width><height>20</height></size></property></spacer></item>
         </layout>
        </widget>
       </item>
-      <item>
-       <widget class="QGroupBox" name="amplitudeGroup">
-        <property name="title">
-         <string>Amplitude Controller — LabOne PID 3</string>
-        </property>
-        <layout class="QFormLayout" name="amplitudeForm">
-         <item row="0" column="0">
-          <widget class="QLabel" name="ampControllerLabel">
-           <property name="text">
-            <string>Controller</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="ampEnable">
-           <property name="text">
-            <string>Enabled</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="ampSetpointLabel">
-           <property name="text">
-            <string>Amplitude setpoint (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="NanonisSpinBox" name="ampSetpoint">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="ampPLabel">
-           <property name="text">
-            <string>P (V/V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="NanonisSpinBox" name="ampP">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>9</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.001000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0">
-          <widget class="QLabel" name="ampILabel">
-           <property name="text">
-            <string>I (1/s)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="NanonisSpinBox" name="ampI">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>6</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0">
-          <widget class="QLabel" name="ampCenterLabel">
-           <property name="text">
-            <string>Output center (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="1">
-          <widget class="NanonisSpinBox" name="ampCenter">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QLabel" name="ampLowerLabel">
-           <property name="text">
-            <string>Lower limit (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="1">
-          <widget class="NanonisSpinBox" name="ampLower">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="0">
-          <widget class="QLabel" name="ampUpperLabel">
-           <property name="text">
-            <string>Upper limit (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="1">
-          <widget class="NanonisSpinBox" name="ampUpper">
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="singleStep">
-            <double>0.100000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="0">
-          <widget class="QLabel" name="ampErrorTitle">
-           <property name="text">
-            <string>Amplitude error (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="1">
-          <widget class="NanonisSpinBox" name="ampErrorValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="0">
-          <widget class="QLabel" name="ampShiftTitle">
-           <property name="text">
-            <string>Drive shift (V)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="1">
-          <widget class="NanonisSpinBox" name="ampShiftValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="9" column="0">
-          <widget class="QLabel" name="ampValueTitle">
-           <property name="text">
-            <string>Drive output (Vpk)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="9" column="1">
-          <widget class="NanonisSpinBox" name="ampValueValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="10" column="0">
-          <widget class="QLabel" name="ampActualMinTitle">
-           <property name="text">
-            <string>Actual minimum drive (Vpk)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="10" column="1">
-          <widget class="NanonisSpinBox" name="ampActualMinValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="11" column="0">
-          <widget class="QLabel" name="ampActualMaxTitle">
-           <property name="text">
-            <string>Actual maximum drive (Vpk)</string>
-           </property>
-          </widget>
-         </item>
-         <item row="11" column="1">
-          <widget class="NanonisSpinBox" name="ampActualMaxValue">
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(238, 238, 238);</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="focusPolicy">
-            <enum>Qt::FocusPolicy::NoFocus</enum>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
-           </property>
-           <property name="decimals">
-            <number>12</number>
-           </property>
-           <property name="minimum">
-            <double>-1000000.000000000000000</double>
-           </property>
-           <property name="maximum">
-            <double>1000000.000000000000000</double>
-           </property>
-           <property name="keyboardTracking">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
+      <item row="0" column="1">
+       <widget class="QGroupBox" name="signalGroup">
+        <property name="title"><string>Signal</string></property>
+        <layout class="QGridLayout" name="signalGrid">
+         <item row="0" column="0"><widget class="QLabel" name="ampMeasuredLabel"><property name="text"><string>Input Ampl. (V)</string></property></widget></item>
+         <item row="0" column="1"><widget class="NanonisSpinBox" name="ampMeasuredValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="1" column="0"><widget class="QLabel" name="ampSetpointLabel"><property name="text"><string>Setpoint (V)</string></property></widget></item>
+         <item row="1" column="1"><widget class="NanonisSpinBox" name="ampSetpoint"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="2" column="0"><widget class="QLabel" name="ampErrorTitle"><property name="text"><string>Ampl. Error (V)</string></property></widget></item>
+         <item row="2" column="1"><widget class="NanonisSpinBox" name="ampErrorValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>12</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="3" column="0" colspan="2"><widget class="QFrame" name="signalLine"><property name="frameShape"><enum>QFrame::HLine</enum></property><property name="frameShadow"><enum>QFrame::Sunken</enum></property></widget></item>
+         <item row="4" column="0"><widget class="QLabel" name="phaseSetpointLabel"><property name="text"><string>Phase Ref. (deg)</string></property></widget></item>
+         <item row="4" column="1"><widget class="NanonisSpinBox" name="phaseSetpoint"><property name="minimum"><double>-360</double></property><property name="maximum"><double>360</double></property><property name="decimals"><number>9</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="5" column="0"><widget class="QLabel" name="phaseMeasuredLabel"><property name="text"><string>Phase (deg)</string></property></widget></item>
+         <item row="5" column="1"><widget class="NanonisSpinBox" name="phaseMeasuredValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>9</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="6" column="0"><widget class="QLabel" name="phaseErrorTitle"><property name="text"><string>Phase Error (deg)</string></property></widget></item>
+         <item row="6" column="1"><widget class="NanonisSpinBox" name="phaseErrorValue"><property name="minimum"><double>-1000000</double></property><property name="maximum"><double>1000000</double></property><property name="decimals"><number>9</number></property><property name="readOnly"><bool>true</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="7" column="0" colspan="2"><spacer name="signalSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint"><size><width>20</width><height>120</height></size></property></spacer></item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QGroupBox" name="pllGroup">
+        <property name="title"><string>PLL</string></property>
+        <layout class="QGridLayout" name="pllGrid">
+         <item row="0" column="0" colspan="2"><widget class="QCheckBox" name="ampEnable"><property name="text"><string>Ampl. Controller</string></property></widget></item>
+         <item row="1" column="0"><widget class="QLabel" name="ampPLabel"><property name="text"><string>P (V/V)</string></property></widget></item>
+         <item row="1" column="1"><widget class="NanonisSpinBox" name="ampP"><property name="minimum"><double>-1000000000</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="2" column="0"><widget class="QLabel" name="ampILabel"><property name="text"><string>I (1/s)</string></property></widget></item>
+         <item row="2" column="1"><widget class="NanonisSpinBox" name="ampI"><property name="minimum"><double>-1000000000000</double></property><property name="maximum"><double>1000000000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="3" column="0" colspan="2"><widget class="QFrame" name="pllLine"><property name="frameShape"><enum>QFrame::HLine</enum></property><property name="frameShadow"><enum>QFrame::Sunken</enum></property></widget></item>
+         <item row="4" column="0" colspan="2"><widget class="QCheckBox" name="phaseEnable"><property name="text"><string>Phase Controller</string></property></widget></item>
+         <item row="5" column="0"><widget class="QLabel" name="phasePLabel"><property name="text"><string>P (Hz/deg)</string></property></widget></item>
+         <item row="5" column="1"><widget class="NanonisSpinBox" name="phaseP"><property name="minimum"><double>-1000000000</double></property><property name="maximum"><double>1000000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="6" column="0"><widget class="QLabel" name="phaseILabel"><property name="text"><string>I (Hz/(deg·s))</string></property></widget></item>
+         <item row="6" column="1"><widget class="NanonisSpinBox" name="phaseI"><property name="minimum"><double>-1000000000000</double></property><property name="maximum"><double>1000000000000</double></property><property name="decimals"><number>12</number></property><property name="keyboardTracking"><bool>false</bool></property><property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property></widget></item>
+         <item row="7" column="0"><widget class="QLabel" name="phaseLockTitle"><property name="text"><string>Lock</string></property></widget></item>
+         <item row="7" column="1"><widget class="QLabel" name="phaseLockValue"><property name="text"><string>—</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+         <item row="8" column="0" colspan="2"><spacer name="pllSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint"><size><width>20</width><height>180</height></size></property></spacer></item>
         </layout>
        </widget>
       </item>
@@ -826,15 +122,11 @@
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusbar" />
+  <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>NanonisSpinBox</class>
-   <extends>QDoubleSpinBox</extends>
-   <header>nanonis_spinbox.py</header>
-  </customwidget>
+  <customwidget><class>NanonisSpinBox</class><extends>QDoubleSpinBox</extends><header>nanonis_spinbox.py</header></customwidget>
  </customwidgets>
- <resources />
- <connections />
+ <resources/>
+ <connections/>
 </ui>

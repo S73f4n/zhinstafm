@@ -86,6 +86,7 @@ class MFLIWorker(QObject):
         self.device = None
         self.phase = None
         self.amplitude = None
+        self.signal_output = None
 
         self._timer: QTimer | None = None
         self._poll_period_s = 0.05
@@ -116,6 +117,7 @@ class MFLIWorker(QObject):
 
             self.phase = self.device.pids[PHASE_PID_INDEX]
             self.amplitude = self.device.pids[AMPLITUDE_PID_INDEX]
+            self.signal_output = self.device.sigouts[0]
 
             self.session.sync()
 
@@ -194,6 +196,7 @@ class MFLIWorker(QObject):
             "amp_center_v": float(self.amplitude.center()),
             "amp_lower_v": float(self.amplitude.limitlower()),
             "amp_upper_v": float(self.amplitude.limitupper()),
+            "signal_output_on": int(self.signal_output.on()),
         }
 
     def _validate_routing(self, cfg: dict[str, Any]) -> None:
@@ -230,7 +233,9 @@ class MFLIWorker(QObject):
             return
 
         try:
-            if key == "phase_enable":
+            if key == "signal_output_on":
+                self.signal_output.on(int(bool(value)), deep=True)
+            elif key == "phase_enable":
                 self.phase.enable(int(bool(value)), deep=True)
             elif key == "phase_setpoint_deg":
                 self.phase.setpoint(float(value), deep=True)
@@ -270,6 +275,58 @@ class MFLIWorker(QObject):
                 self.settings_updated.emit(self._read_settings())
             except Exception:
                 pass
+
+
+    @Slot()
+    def center_phase_frequency(self) -> None:
+        """Rebase PLL1 Center onto the current PLL output without unlocking.
+
+        The current MFLI PID node tree no longer exposes the historic
+        AUTOCENTER command.  The least intrusive equivalent is therefore to
+        copy the present PID output (Value) into Center while leaving PLL1
+        continuously enabled.  We deliberately do not toggle ENABLE, KEEPINT,
+        or any PID gain here.
+
+        After the write we read Shift back.  A non-negligible residual is only
+        reported; this routine never falls back to restarting the PLL.
+        """
+        if self.device is None:
+            self.warning.emit("Not connected.")
+            return
+
+        try:
+            current_frequency = float(self.phase.value())
+
+            # One synchronous setting write.  PLL1 remains enabled throughout.
+            self.phase.center(current_frequency, deep=True)
+
+            center = float(self.phase.center())
+            shift = float(self.phase.shift())
+            value = float(self.phase.value())
+
+            self.settings_updated.emit(self._read_settings())
+            self.live_updated.emit(
+                {
+                    "phase_shift": shift,
+                    "phase_value": value,
+                }
+            )
+
+            # A small finite residual can occur because the PLL continues to
+            # evolve while the write/readback crosses the Data Server.  Flag
+            # only a clearly visible residual; do not disturb the controller.
+            tolerance_hz = max(1e-6, abs(value) * 1e-12)
+            if abs(shift) > tolerance_hz:
+                self.warning.emit(
+                    "Center updated without unlocking PLL1, but the immediate "
+                    f"Shift readback is {shift:+.6g} Hz (Center {center:.9g} Hz). "
+                    "No automatic PLL restart was performed."
+                )
+
+        except Exception as exc:
+            self.warning.emit(
+                f"Could not center frequency: {type(exc).__name__}: {exc}"
+            )
 
     @Slot()
     def _poll_once(self) -> None:
@@ -339,6 +396,7 @@ class MFLIWorker(QObject):
 
         self.phase = None
         self.amplitude = None
+        self.signal_output = None
         self.device = None
         self.session = None
 
@@ -373,6 +431,7 @@ class OscillationControlApp(QObject):
 
     connect_requested = Signal(str, str)
     refresh_requested = Signal()
+    center_requested = Signal()
     set_requested = Signal(str, object)
     shutdown_requested = Signal()
 
@@ -406,28 +465,36 @@ class OscillationControlApp(QObject):
         self.refresh_button = self.widget(QPushButton, "refreshButton")
         self.statusbar = self.widget(QStatusBar, "statusbar")
 
-        # PLL 1
-        self.phase_enable = self.widget(QCheckBox, "phaseEnable")
-        self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
-        self.phase_p = self.widget(NanonisSpinBox, "phaseP")
-        self.phase_i = self.widget(NanonisSpinBox, "phaseI")
+        # Output / frequency-generator controls
+        self.signal_output_enable = self.widget(QCheckBox, "signalOutputEnable")
+        self.center_button = self.widget(QPushButton, "centerButton")
         self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
         self.phase_lower = self.widget(NanonisSpinBox, "phaseLower")
         self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
-        self.phase_error_label = self.widget(NanonisSpinBox, "phaseErrorValue")
         self.phase_shift_label = self.widget(NanonisSpinBox, "phaseShiftValue")
         self.phase_value_label = self.widget(NanonisSpinBox, "phaseValueValue")
-        self.phase_lock_label = self.widget(QLabel, "phaseLockValue")
 
-        # PID 3
-        self.amp_enable = self.widget(QCheckBox, "ampEnable")
+        # Signal / setpoint area
         self.amp_setpoint = self.widget(NanonisSpinBox, "ampSetpoint")
+        self.amp_measured = self.widget(NanonisSpinBox, "ampMeasuredValue")
+        self.amp_error_label = self.widget(NanonisSpinBox, "ampErrorValue")
+        self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
+        self.phase_measured = self.widget(NanonisSpinBox, "phaseMeasuredValue")
+        self.phase_error_label = self.widget(NanonisSpinBox, "phaseErrorValue")
+
+        # PLL / PID controllers
+        self.amp_enable = self.widget(QCheckBox, "ampEnable")
         self.amp_p = self.widget(NanonisSpinBox, "ampP")
         self.amp_i = self.widget(NanonisSpinBox, "ampI")
+        self.phase_enable = self.widget(QCheckBox, "phaseEnable")
+        self.phase_p = self.widget(NanonisSpinBox, "phaseP")
+        self.phase_i = self.widget(NanonisSpinBox, "phaseI")
+        self.phase_lock_label = self.widget(QLabel, "phaseLockValue")
+
+        # Amplitude-output values and limits
         self.amp_center = self.widget(NanonisSpinBox, "ampCenter")
         self.amp_lower = self.widget(NanonisSpinBox, "ampLower")
         self.amp_upper = self.widget(NanonisSpinBox, "ampUpper")
-        self.amp_error_label = self.widget(NanonisSpinBox, "ampErrorValue")
         self.amp_shift_label = self.widget(NanonisSpinBox, "ampShiftValue")
         self.amp_value_label = self.widget(NanonisSpinBox, "ampValueValue")
         self.amp_actual_min_label = self.widget(NanonisSpinBox, "ampActualMinValue")
@@ -475,12 +542,7 @@ class OscillationControlApp(QObject):
             )
 
     def _configure_nanonis_spinboxes(self) -> None:
-        """
-        Nanonis-style fields: editor text is number + SI prefix only.
-
-        Base units are fixed metadata and are shown in the adjacent labels.
-        NanonisSpinBox.value() always returns the value in the base unit.
-        """
+        """Configure Nanonis-style editable fields and grey readbacks."""
         controls = (
             (self.phase_setpoint, "deg"),
             (self.phase_p, "Hz/deg"),
@@ -498,9 +560,11 @@ class OscillationControlApp(QObject):
 
         readbacks = (
             (self.phase_error_label, "deg"),
+            (self.phase_measured, "deg"),
             (self.phase_shift_label, "Hz"),
             (self.phase_value_label, "Hz"),
             (self.amp_error_label, "V"),
+            (self.amp_measured, "V"),
             (self.amp_shift_label, "V"),
             (self.amp_value_label, "Vpk"),
             (self.amp_actual_min_label, "Vpk"),
@@ -519,33 +583,35 @@ class OscillationControlApp(QObject):
             control.setDisplayDecimals(6)
             control.setToolTip(f"{hint} Base unit: {base_unit or '1'}.")
 
-        # Read-only MFLI values use the same numeric presentation as editable
-        # fields, but with the grey Nanonis-style readback appearance.
+        readback_style = (
+            "QDoubleSpinBox {"
+            " background-color: rgb(238, 238, 238);"
+            " color: palette(text);"
+            " border: 1px solid palette(mid);"
+            " padding: 1px 3px;"
+            "}"
+        )
         for control, base_unit in readbacks:
             control.setBaseUnit(base_unit)
             control.setDisplayDecimals(6)
             control.setReadOnly(True)
             control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            control.setStyleSheet(
-                "QDoubleSpinBox {"
-                " background-color: palette(midlight);"
-                " color: palette(text);"
-                " border: 1px solid palette(mid);"
-                " padding: 1px 3px;"
-                "}"
-            )
+            control.setStyleSheet(readback_style)
             control.setToolTip(f"Live MFLI readback. Base unit: {base_unit}.")
 
     def _connect_gui_signals(self) -> None:
         self.connect_button.clicked.connect(self._connect_with_saved_settings)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
+        self.center_button.clicked.connect(self.center_requested.emit)
 
+        self.signal_output_enable.toggled.connect(
+            lambda v: self._emit_if_user("signal_output_on", v)
+        )
         self.phase_enable.toggled.connect(
             lambda v: self._emit_if_user("phase_enable", v)
         )
         # valueChanged is immediate for wheel/Up/Down stepping. With
-        # keyboardTracking(False) in NanonisSpinBox, ordinary text entry is
-        # still committed only on Enter/focus change.
+        # keyboardTracking(False), typed text still waits for commit.
         self.phase_setpoint.valueChanged.connect(
             lambda v: self._emit_if_user("phase_setpoint_deg", v)
         )
@@ -601,6 +667,7 @@ class OscillationControlApp(QObject):
 
         self.connect_requested.connect(self.worker.connect_instrument)
         self.refresh_requested.connect(self.worker.refresh_settings)
+        self.center_requested.connect(self.worker.center_phase_frequency)
         self.set_requested.connect(self.worker.set_parameter)
         self.shutdown_requested.connect(self.worker.shutdown)
 
@@ -620,6 +687,7 @@ class OscillationControlApp(QObject):
     @Slot(dict)
     def _on_connected(self, cfg: dict) -> None:
         self.refresh_button.setEnabled(True)
+        self.center_button.setEnabled(True)
         self.connect_button.setEnabled(False)
         self.host_edit.setEnabled(False)
         self.serial_edit.setEnabled(False)
@@ -639,6 +707,7 @@ class OscillationControlApp(QObject):
     def _apply_settings(self, s: dict) -> None:
         self._updating_from_device = True
         try:
+            self.signal_output_enable.setChecked(bool(s["signal_output_on"]))
             self.phase_enable.setChecked(bool(s["phase_enable"]))
             self.phase_setpoint.setValue(float(s["phase_setpoint_deg"]))
             self.phase_p.setValue(float(s["phase_p"]))
@@ -665,7 +734,10 @@ class OscillationControlApp(QObject):
     @Slot(dict)
     def _apply_live(self, d: dict) -> None:
         if "phase_error" in d:
-            self.phase_error_label.setValue(float(d["phase_error"]))
+            phase_error = float(d["phase_error"])
+            self.phase_error_label.setValue(phase_error)
+            # MFLI defines Error = Setpoint - Input.
+            self.phase_measured.setValue(self.phase_setpoint.value() - phase_error)
         if "phase_shift" in d:
             self.phase_shift_label.setValue(float(d["phase_shift"]))
         if "phase_value" in d:
@@ -674,7 +746,9 @@ class OscillationControlApp(QObject):
             self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
 
         if "amp_error" in d:
-            self.amp_error_label.setValue(float(d["amp_error"]))
+            amp_error = float(d["amp_error"])
+            self.amp_error_label.setValue(amp_error)
+            self.amp_measured.setValue(self.amp_setpoint.value() - amp_error)
         if "amp_shift" in d:
             self.amp_shift_label.setValue(float(d["amp_shift"]))
         if "amp_value" in d:
