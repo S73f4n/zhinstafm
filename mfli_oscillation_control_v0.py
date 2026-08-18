@@ -1913,7 +1913,6 @@ class OscillationControlApp(QObject):
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setStyle("Fusion")
     QApplication.styleHints().setColorScheme(Qt.ColorScheme.Light)
 
     ui_path = Path(__file__).resolve().with_name(UI_FILENAME)
