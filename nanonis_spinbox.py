@@ -3,12 +3,11 @@ from __future__ import annotations
 import math
 import re
 
-from PySide6.QtCore import Property, QTimer
+from PySide6.QtCore import Property, QTimer, Qt
 from PySide6.QtGui import QValidator
-from PySide6.QtWidgets import QDoubleSpinBox, QWidget
+from PySide6.QtWidgets import QAbstractSpinBox, QDoubleSpinBox, QWidget
 
 
-# Engineering/SI prefixes. "u" is accepted as an ASCII alias for micro.
 _PREFIX_TO_EXPONENT = {
     "y": -24,
     "z": -21,
@@ -31,6 +30,7 @@ _PREFIX_TO_EXPONENT = {
     "Z": 21,
     "Y": 24,
 }
+
 _EXPONENT_TO_PREFIX = {
     -24: "y",
     -21: "z",
@@ -51,13 +51,15 @@ _EXPONENT_TO_PREFIX = {
     24: "Y",
 }
 
-_NUMBER_RE = re.compile(
+# Runtime text is strictly:
+#       signed-number [optional SI-prefix]
+#
+# The base unit never appears in the editor. It belongs in the adjacent label.
+_NUMBER_PREFIX_RE = re.compile(
     r"^\s*"
     r"([+-]?(?:(?:\d+(?:[.,]\d*)?)|(?:[.,]\d+))(?:[eE][+-]?\d+)?)"
     r"\s*"
     r"([yzafpnumµμkKMGTPEZY]?)"
-    r"\s*"
-    r"(.*?)"
     r"\s*$"
 )
 
@@ -76,13 +78,21 @@ def _engineering_exponent(value: float, display_decimals: int = 6) -> int:
     return exponent
 
 
-def format_si(
+def format_eng_number(
     value: float,
-    unit: str = "",
     decimals: int = 6,
     show_plus: bool = False,
 ) -> str:
-    """Format a value in base SI units using an engineering prefix."""
+    """
+    Format in Nanonis-style engineering notation: number + SI prefix only.
+
+    Examples:
+        974454.238 -> "974.454238k"
+        0.060      -> "60.000000m"
+        2.46e-3    -> "2.460000m"
+
+    No base-unit text is appended.
+    """
     if not math.isfinite(value):
         return str(value)
 
@@ -91,55 +101,57 @@ def format_si(
     scaled = value / (10.0**exponent)
 
     sign = "+" if show_plus else ""
-    number = f"{scaled:{sign}.{decimals}f}"
-
-    if unit:
-        return f"{number} {prefix}{unit}"
-    if prefix:
-        return f"{number}{prefix}"
-    return number
+    return f"{scaled:{sign}.{decimals}f}{prefix}"
 
 
-class SISpinBox(QDoubleSpinBox):
+class NanonisSpinBox(QDoubleSpinBox):
     """
-    QDoubleSpinBox with Nanonis-style engineering entry and cursor-digit stepping.
+    Nanonis-style numeric field.
 
-    Examples for a spin box whose base unit is "Hz":
-        1000          -> 1.000000 kHz
-        type "2.5k"   -> 2500 Hz
-        type "3M"     -> 3 MHz
-        type "250m"   -> 0.250 Hz
+    Runtime appearance/input:
+        974.454238k
+        60.000000m
+        2.500000
 
-    Up/Down and the mouse wheel change the digit immediately to the right of
-    the text cursor. For example, in:
+    The BASE UNIT is never displayed or accepted inside the field. Put it in
+    the field label, e.g. "Center Freq. (Hz)" or "Amplitude Setpoint (V)".
 
-        974.454238 kHz
-            ^
+    Input examples, for any base unit:
+        2.5k   -> 2500
+        60m    -> 0.060
+        300u   -> 300e-6
+        4M     -> 4e6
 
-    placing the cursor immediately before the first "4" after the decimal
-    changes the value in 100 Hz increments.
+    Cursor stepping:
+        place the text cursor immediately BEFORE a digit and use Up/Down or
+        the mouse wheel; that digit's decimal place is incremented/decremented.
 
-    value() and setValue() always use the BASE SI unit. The prefix is purely
-    display/input syntax.
+    value() / setValue() always use the base-unit value.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._unit = ""
+
         self._display_decimals = 6
+        self._base_unit = ""
+
         self.setKeyboardTracking(False)
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-    # ---- Designer-visible properties -------------------------------------
+    # Metadata only. It never becomes part of the editor text.
+    def getBaseUnit(self) -> str:
+        return self._base_unit
 
-    def getUnit(self) -> str:
-        return self._unit
+    def setBaseUnit(self, unit: str) -> None:
+        self._base_unit = str(unit)
+        if self._base_unit:
+            self.setToolTip(
+                f"Base unit: {self._base_unit}. Enter SI prefixes only "
+                f"(for example m, k, M)."
+            )
 
-    def setUnit(self, unit: str) -> None:
-        self._unit = str(unit)
-        # Force a redisplay using the new unit.
-        self.lineEdit().setText(self.textFromValue(self.value()))
-
-    unit = Property(str, getUnit, setUnit)
+    baseUnit = Property(str, getBaseUnit, setBaseUnit)
 
     def getDisplayDecimals(self) -> int:
         return self._display_decimals
@@ -153,9 +165,8 @@ class SISpinBox(QDoubleSpinBox):
     # ---- QDoubleSpinBox virtuals -----------------------------------------
 
     def textFromValue(self, value: float) -> str:
-        return format_si(
+        return format_eng_number(
             float(value),
-            unit=self._unit,
             decimals=self._display_decimals,
         )
 
@@ -168,7 +179,6 @@ class SISpinBox(QDoubleSpinBox):
     def validate(self, text: str, pos: int):
         stripped = text.strip()
 
-        # Useful intermediate states while typing.
         if stripped in {"", "+", "-", ".", ",", "+.", "-.", "+,", "-,"}:
             return (QValidator.State.Intermediate, text, pos)
 
@@ -178,7 +188,7 @@ class SISpinBox(QDoubleSpinBox):
                 return (QValidator.State.Acceptable, text, pos)
             return (QValidator.State.Intermediate, text, pos)
 
-        # Keep incomplete exponent entry editable, e.g. "1e" or "1e-".
+        # Incomplete scientific notation while typing, e.g. "1e-".
         if re.match(
             r"^\s*[+-]?(?:(?:\d+(?:[.,]\d*)?)|(?:[.,]\d+))[eE][+-]?\s*$",
             text,
@@ -188,17 +198,11 @@ class SISpinBox(QDoubleSpinBox):
         return (QValidator.State.Invalid, text, pos)
 
     def stepBy(self, steps: int) -> None:
-        """
-        Step the decimal place selected by the text cursor.
-
-        QAbstractSpinBox routes Up/Down and wheel stepping through stepBy(), so
-        one implementation covers both input methods.
-        """
         editor = self.lineEdit()
         text = editor.text()
         cursor = editor.cursorPosition()
 
-        match = _NUMBER_RE.match(text)
+        match = _NUMBER_PREFIX_RE.match(text)
         if match is None:
             super().stepBy(steps)
             return
@@ -206,17 +210,15 @@ class SISpinBox(QDoubleSpinBox):
         number_start, number_end = match.span(1)
         number_token = match.group(1)
 
-        # The selected digit is the first digit at or to the right of the
-        # cursor. This matches "put the cursor in front of the digit".
+        # Digit immediately at/right of the cursor: cursor is "in front of"
+        # the digit, matching the Nanonis interaction model.
         digit_pos = None
-        search_start = max(cursor, number_start)
-        for p in range(search_start, number_end):
+        for p in range(max(cursor, number_start), number_end):
             if text[p].isdigit():
                 digit_pos = p
                 break
 
-        # If the cursor is past the numeric field, use the nearest digit to
-        # the left rather than falling back to an unrelated singleStep().
+        # If the cursor is at the end/prefix, use the nearest numeric digit.
         if digit_pos is None:
             for p in range(min(cursor - 1, number_end - 1), number_start - 1, -1):
                 if text[p].isdigit():
@@ -227,10 +229,10 @@ class SISpinBox(QDoubleSpinBox):
             super().stepBy(steps)
             return
 
-        local = digit_pos - number_start
+        local_index = digit_pos - number_start
         sign_len = 1 if number_token.startswith(("+", "-")) else 0
         core = number_token[sign_len:]
-        core_index = local - sign_len
+        core_index = local_index - sign_len
 
         decimal_index = core.find(".")
         if decimal_index < 0:
@@ -241,7 +243,6 @@ class SISpinBox(QDoubleSpinBox):
         if core_index < decimal_index:
             digit_exponent = decimal_index - core_index - 1
         else:
-            # First digit after the decimal point is 10^-1.
             digit_exponent = -(core_index - decimal_index)
 
         prefix = match.group(2)
@@ -257,7 +258,7 @@ class SISpinBox(QDoubleSpinBox):
         new_value = min(self.maximum(), max(self.minimum(), new_value))
         self.setValue(new_value)
 
-        # Keep the cursor near the same textual digit after Qt reformats.
+        # Preserve approximately the same cursor location after reformatting.
         old_cursor = cursor
         QTimer.singleShot(
             0,
@@ -266,27 +267,14 @@ class SISpinBox(QDoubleSpinBox):
             ),
         )
 
-    # ---- Parsing ----------------------------------------------------------
-
     def _parse_text(self, text: str) -> float | None:
         text = text.replace("\N{MINUS SIGN}", "-")
-        match = _NUMBER_RE.match(text)
+        match = _NUMBER_PREFIX_RE.match(text)
         if match is None:
             return None
 
         number_text = match.group(1).replace(",", ".")
         prefix = match.group(2)
-        remainder = match.group(3).strip()
-
-        # The unit is optional on typed input. If the user does include it,
-        # require it to match this control's configured base unit.
-        if remainder:
-            if not self._unit:
-                return None
-            compact_remainder = remainder.replace(" ", "")
-            compact_unit = self._unit.replace(" ", "")
-            if compact_remainder != compact_unit:
-                return None
 
         try:
             number = float(number_text)
@@ -300,4 +288,5 @@ class SISpinBox(QDoubleSpinBox):
         value = number * (10.0**exponent)
         if not math.isfinite(value):
             return None
+
         return value

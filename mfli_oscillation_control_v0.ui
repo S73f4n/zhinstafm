@@ -102,7 +102,13 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="SISpinBox" name="phaseSetpoint">
+          <widget class="NanonisSpinBox" name="phaseSetpoint">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-360.000000000000000</double></property>
            <property name="maximum"><double>360.000000000000000</double></property>
@@ -112,11 +118,17 @@
          </item>
          <item row="2" column="0">
           <widget class="QLabel" name="phasePLabel">
-           <property name="text"><string>P</string></property>
+           <property name="text"><string>P (Hz/deg)</string></property>
           </widget>
          </item>
          <item row="2" column="1">
-          <widget class="SISpinBox" name="phaseP">
+          <widget class="NanonisSpinBox" name="phaseP">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>9</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
@@ -126,11 +138,17 @@
          </item>
          <item row="3" column="0">
           <widget class="QLabel" name="phaseILabel">
-           <property name="text"><string>I</string></property>
+           <property name="text"><string>I (Hz/(deg·s))</string></property>
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="SISpinBox" name="phaseI">
+          <widget class="NanonisSpinBox" name="phaseI">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000000.000000000000000</double></property>
@@ -140,11 +158,17 @@
          </item>
          <item row="4" column="0">
           <widget class="QLabel" name="phaseCenterLabel">
-           <property name="text"><string>Frequency center</string></property>
+           <property name="text"><string>Frequency center (Hz)</string></property>
           </widget>
          </item>
          <item row="4" column="1">
-          <widget class="SISpinBox" name="phaseCenter">
+          <widget class="NanonisSpinBox" name="phaseCenter">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>0.000000000000000</double></property>
            <property name="maximum"><double>10000000000.000000000000000</double></property>
@@ -154,11 +178,17 @@
          </item>
          <item row="5" column="0">
           <widget class="QLabel" name="phaseLowerLabel">
-           <property name="text"><string>Lower limit (relative)</string></property>
+           <property name="text"><string>Lower limit (Hz)</string></property>
           </widget>
          </item>
          <item row="5" column="1">
-          <widget class="SISpinBox" name="phaseLower">
+          <widget class="NanonisSpinBox" name="phaseLower">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
@@ -168,11 +198,17 @@
          </item>
          <item row="6" column="0">
           <widget class="QLabel" name="phaseUpperLabel">
-           <property name="text"><string>Upper limit (relative)</string></property>
+           <property name="text"><string>Upper limit (Hz)</string></property>
           </widget>
          </item>
          <item row="6" column="1">
-          <widget class="SISpinBox" name="phaseUpper">
+          <widget class="NanonisSpinBox" name="phaseUpper">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
@@ -182,7 +218,7 @@
          </item>
          <item row="7" column="0">
           <widget class="QLabel" name="phaseErrorTitle">
-           <property name="text"><string>Phase error</string></property>
+           <property name="text"><string>Phase error (deg)</string></property>
           </widget>
          </item>
          <item row="7" column="1">
@@ -192,7 +228,7 @@
          </item>
          <item row="8" column="0">
           <widget class="QLabel" name="phaseShiftTitle">
-           <property name="text"><string>Frequency shift</string></property>
+           <property name="text"><string>Frequency shift (Hz)</string></property>
           </widget>
          </item>
          <item row="8" column="1">
@@ -202,7 +238,7 @@
          </item>
          <item row="9" column="0">
           <widget class="QLabel" name="phaseValueTitle">
-           <property name="text"><string>Actual frequency</string></property>
+           <property name="text"><string>Actual frequency (Hz)</string></property>
           </widget>
          </item>
          <item row="9" column="1">
@@ -241,11 +277,17 @@
          </item>
          <item row="1" column="0">
           <widget class="QLabel" name="ampSetpointLabel">
-           <property name="text"><string>Amplitude setpoint</string></property>
+           <property name="text"><string>Amplitude setpoint (V)</string></property>
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="SISpinBox" name="ampSetpoint">
+          <widget class="NanonisSpinBox" name="ampSetpoint">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
@@ -255,11 +297,17 @@
          </item>
          <item row="2" column="0">
           <widget class="QLabel" name="ampPLabel">
-           <property name="text"><string>P</string></property>
+           <property name="text"><string>P (V/V)</string></property>
           </widget>
          </item>
          <item row="2" column="1">
-          <widget class="SISpinBox" name="ampP">
+          <widget class="NanonisSpinBox" name="ampP">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>9</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
@@ -269,11 +317,17 @@
          </item>
          <item row="3" column="0">
           <widget class="QLabel" name="ampILabel">
-           <property name="text"><string>I</string></property>
+           <property name="text"><string>I (1/s)</string></property>
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="SISpinBox" name="ampI">
+          <widget class="NanonisSpinBox" name="ampI">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000000.000000000000000</double></property>
@@ -283,11 +337,17 @@
          </item>
          <item row="4" column="0">
           <widget class="QLabel" name="ampCenterLabel">
-           <property name="text"><string>Output center</string></property>
+           <property name="text"><string>Output center (V)</string></property>
           </widget>
          </item>
          <item row="4" column="1">
-          <widget class="SISpinBox" name="ampCenter">
+          <widget class="NanonisSpinBox" name="ampCenter">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
@@ -297,11 +357,17 @@
          </item>
          <item row="5" column="0">
           <widget class="QLabel" name="ampLowerLabel">
-           <property name="text"><string>Lower limit (relative)</string></property>
+           <property name="text"><string>Lower limit (V)</string></property>
           </widget>
          </item>
          <item row="5" column="1">
-          <widget class="SISpinBox" name="ampLower">
+          <widget class="NanonisSpinBox" name="ampLower">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
@@ -311,11 +377,17 @@
          </item>
          <item row="6" column="0">
           <widget class="QLabel" name="ampUpperLabel">
-           <property name="text"><string>Upper limit (relative)</string></property>
+           <property name="text"><string>Upper limit (V)</string></property>
           </widget>
          </item>
          <item row="6" column="1">
-          <widget class="SISpinBox" name="ampUpper">
+          <widget class="NanonisSpinBox" name="ampUpper">
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::ButtonSymbols::NoButtons</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+           </property>
            <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
@@ -325,7 +397,7 @@
          </item>
          <item row="7" column="0">
           <widget class="QLabel" name="ampErrorTitle">
-           <property name="text"><string>Amplitude error</string></property>
+           <property name="text"><string>Amplitude error (V)</string></property>
           </widget>
          </item>
          <item row="7" column="1">
@@ -335,7 +407,7 @@
          </item>
          <item row="8" column="0">
           <widget class="QLabel" name="ampShiftTitle">
-           <property name="text"><string>Drive shift</string></property>
+           <property name="text"><string>Drive shift (V)</string></property>
           </widget>
          </item>
          <item row="8" column="1">
@@ -345,7 +417,7 @@
          </item>
          <item row="9" column="0">
           <widget class="QLabel" name="ampValueTitle">
-           <property name="text"><string>Drive output</string></property>
+           <property name="text"><string>Drive output (Vpk)</string></property>
           </widget>
          </item>
          <item row="9" column="1">
@@ -355,7 +427,7 @@
          </item>
          <item row="10" column="0">
           <widget class="QLabel" name="ampActualMinTitle">
-           <property name="text"><string>Actual minimum drive</string></property>
+           <property name="text"><string>Actual minimum drive (Vpk)</string></property>
           </widget>
          </item>
          <item row="10" column="1">
@@ -365,7 +437,7 @@
          </item>
          <item row="11" column="0">
           <widget class="QLabel" name="ampActualMaxTitle">
-           <property name="text"><string>Actual maximum drive</string></property>
+           <property name="text"><string>Actual maximum drive (Vpk)</string></property>
           </widget>
          </item>
          <item row="11" column="1">
@@ -384,9 +456,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>SISpinBox</class>
+   <class>NanonisSpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header>si_spinbox_v0.py</header>
+   <header>nanonis_spinbox.py</header>
   </customwidget>
  </customwidgets>
  <resources/>

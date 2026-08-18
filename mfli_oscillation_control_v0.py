@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from si_spinbox_v0 import SISpinBox, format_si
+from nanonis_spinbox import NanonisSpinBox, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -346,7 +346,7 @@ def load_ui(path: Path) -> QMainWindow:
         raise RuntimeError(f"Could not open UI file: {path}")
 
     loader = QUiLoader()
-    loader.registerCustomWidget(SISpinBox)
+    loader.registerCustomWidget(NanonisSpinBox)
     try:
         window = loader.load(ui_file)
     finally:
@@ -379,7 +379,7 @@ class OscillationControlApp(QObject):
         self._shutting_down = False
 
         self._bind_widgets()
-        self._configure_si_spinboxes()
+        self._configure_nanonis_spinboxes()
         self._connect_gui_signals()
         self._build_worker()
 
@@ -402,12 +402,12 @@ class OscillationControlApp(QObject):
 
         # PLL 1
         self.phase_enable = self.widget(QCheckBox, "phaseEnable")
-        self.phase_setpoint = self.widget(SISpinBox, "phaseSetpoint")
-        self.phase_p = self.widget(SISpinBox, "phaseP")
-        self.phase_i = self.widget(SISpinBox, "phaseI")
-        self.phase_center = self.widget(SISpinBox, "phaseCenter")
-        self.phase_lower = self.widget(SISpinBox, "phaseLower")
-        self.phase_upper = self.widget(SISpinBox, "phaseUpper")
+        self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
+        self.phase_p = self.widget(NanonisSpinBox, "phaseP")
+        self.phase_i = self.widget(NanonisSpinBox, "phaseI")
+        self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
+        self.phase_lower = self.widget(NanonisSpinBox, "phaseLower")
+        self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
         self.phase_error_label = self.widget(QLabel, "phaseErrorValue")
         self.phase_shift_label = self.widget(QLabel, "phaseShiftValue")
         self.phase_value_label = self.widget(QLabel, "phaseValueValue")
@@ -415,24 +415,24 @@ class OscillationControlApp(QObject):
 
         # PID 3
         self.amp_enable = self.widget(QCheckBox, "ampEnable")
-        self.amp_setpoint = self.widget(SISpinBox, "ampSetpoint")
-        self.amp_p = self.widget(SISpinBox, "ampP")
-        self.amp_i = self.widget(SISpinBox, "ampI")
-        self.amp_center = self.widget(SISpinBox, "ampCenter")
-        self.amp_lower = self.widget(SISpinBox, "ampLower")
-        self.amp_upper = self.widget(SISpinBox, "ampUpper")
+        self.amp_setpoint = self.widget(NanonisSpinBox, "ampSetpoint")
+        self.amp_p = self.widget(NanonisSpinBox, "ampP")
+        self.amp_i = self.widget(NanonisSpinBox, "ampI")
+        self.amp_center = self.widget(NanonisSpinBox, "ampCenter")
+        self.amp_lower = self.widget(NanonisSpinBox, "ampLower")
+        self.amp_upper = self.widget(NanonisSpinBox, "ampUpper")
         self.amp_error_label = self.widget(QLabel, "ampErrorValue")
         self.amp_shift_label = self.widget(QLabel, "ampShiftValue")
         self.amp_value_label = self.widget(QLabel, "ampValueValue")
         self.amp_actual_min_label = self.widget(QLabel, "ampActualMinValue")
         self.amp_actual_max_label = self.widget(QLabel, "ampActualMaxValue")
 
-    def _configure_si_spinboxes(self) -> None:
+    def _configure_nanonis_spinboxes(self) -> None:
         """
-        Configure the BASE SI unit for each numeric field.
+        Nanonis-style fields: editor text is number + SI prefix only.
 
-        SISpinBox.value() always returns the value in this base unit. Thus a
-        control displaying "60.000000 mV" returns 0.060 from value().
+        Base units are fixed metadata and are shown in the adjacent labels.
+        NanonisSpinBox.value() always returns the value in the base unit.
         """
         controls = (
             (self.phase_setpoint, "deg"),
@@ -442,7 +442,7 @@ class OscillationControlApp(QObject):
             (self.phase_lower, "Hz"),
             (self.phase_upper, "Hz"),
             (self.amp_setpoint, "V"),
-            (self.amp_p, ""),
+            (self.amp_p, "V/V"),
             (self.amp_i, "1/s"),
             (self.amp_center, "V"),
             (self.amp_lower, "V"),
@@ -450,15 +450,16 @@ class OscillationControlApp(QObject):
         )
 
         hint = (
-            "SI prefixes accepted: p, n, u/µ, m, k, M, G, etc. "
-            "Put the cursor immediately before a digit and use the mouse "
-            "wheel or Up/Down to change that digit."
+            "Enter number + SI prefix only (for example 60m, 974.5k). "
+            "The fixed base unit is shown in the label. Put the cursor "
+            "immediately before a digit and use mouse wheel or Up/Down "
+            "to change that digit."
         )
 
-        for control, unit in controls:
-            control.setUnit(unit)
+        for control, base_unit in controls:
+            control.setBaseUnit(base_unit)
             control.setDisplayDecimals(6)
-            control.setToolTip(hint)
+            control.setToolTip(f"{hint} Base unit: {base_unit or '1'}.")
 
     def _connect_gui_signals(self) -> None:
         self.connect_button.clicked.connect(
@@ -575,8 +576,8 @@ class OscillationControlApp(QObject):
 
             actual_min_v = float(s["amp_center_v"]) + float(s["amp_lower_v"])
             actual_max_v = float(s["amp_center_v"]) + float(s["amp_upper_v"])
-            self.amp_actual_min_label.setText(format_si(actual_min_v, "Vpk"))
-            self.amp_actual_max_label.setText(format_si(actual_max_v, "Vpk"))
+            self.amp_actual_min_label.setText(format_eng_number(actual_min_v))
+            self.amp_actual_max_label.setText(format_eng_number(actual_max_v))
         finally:
             self._updating_from_device = False
 
@@ -584,30 +585,30 @@ class OscillationControlApp(QObject):
     def _apply_live(self, d: dict) -> None:
         if "phase_error" in d:
             self.phase_error_label.setText(
-                format_si(float(d["phase_error"]), "deg", show_plus=True)
+                format_eng_number(float(d["phase_error"]), show_plus=True)
             )
         if "phase_shift" in d:
             self.phase_shift_label.setText(
-                format_si(float(d["phase_shift"]), "Hz", show_plus=True)
+                format_eng_number(float(d["phase_shift"]), show_plus=True)
             )
         if "phase_value" in d:
             self.phase_value_label.setText(
-                format_si(float(d["phase_value"]), "Hz")
+                format_eng_number(float(d["phase_value"]))
             )
         if "phase_locked" in d:
             self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
 
         if "amp_error" in d:
             self.amp_error_label.setText(
-                format_si(float(d["amp_error"]), "V", show_plus=True)
+                format_eng_number(float(d["amp_error"]), show_plus=True)
             )
         if "amp_shift" in d:
             self.amp_shift_label.setText(
-                format_si(float(d["amp_shift"]), "Vpk", show_plus=True)
+                format_eng_number(float(d["amp_shift"]), show_plus=True)
             )
         if "amp_value" in d:
             self.amp_value_label.setText(
-                format_si(float(d["amp_value"]), "Vpk")
+                format_eng_number(float(d["amp_value"]))
             )
 
     @Slot()
