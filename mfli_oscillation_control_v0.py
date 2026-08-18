@@ -19,14 +19,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from nanonis_spinbox import NanonisSpinBox, format_eng_number
+from nanonis_spinbox import NanonisSpinBox
 
 from zhinst.toolkit import Session
 
 
 PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
-UI_FILENAME = "mfli_oscillation_control_v0_nanonis.ui"
+UI_FILENAME = "mfli_oscillation_control_v0.ui"
 
 T = TypeVar("T", bound=QObject)
 
@@ -408,9 +408,9 @@ class OscillationControlApp(QObject):
         self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
         self.phase_lower = self.widget(NanonisSpinBox, "phaseLower")
         self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
-        self.phase_error_label = self.widget(QLabel, "phaseErrorValue")
-        self.phase_shift_label = self.widget(QLabel, "phaseShiftValue")
-        self.phase_value_label = self.widget(QLabel, "phaseValueValue")
+        self.phase_error_label = self.widget(NanonisSpinBox, "phaseErrorValue")
+        self.phase_shift_label = self.widget(NanonisSpinBox, "phaseShiftValue")
+        self.phase_value_label = self.widget(NanonisSpinBox, "phaseValueValue")
         self.phase_lock_label = self.widget(QLabel, "phaseLockValue")
 
         # PID 3
@@ -421,11 +421,11 @@ class OscillationControlApp(QObject):
         self.amp_center = self.widget(NanonisSpinBox, "ampCenter")
         self.amp_lower = self.widget(NanonisSpinBox, "ampLower")
         self.amp_upper = self.widget(NanonisSpinBox, "ampUpper")
-        self.amp_error_label = self.widget(QLabel, "ampErrorValue")
-        self.amp_shift_label = self.widget(QLabel, "ampShiftValue")
-        self.amp_value_label = self.widget(QLabel, "ampValueValue")
-        self.amp_actual_min_label = self.widget(QLabel, "ampActualMinValue")
-        self.amp_actual_max_label = self.widget(QLabel, "ampActualMaxValue")
+        self.amp_error_label = self.widget(NanonisSpinBox, "ampErrorValue")
+        self.amp_shift_label = self.widget(NanonisSpinBox, "ampShiftValue")
+        self.amp_value_label = self.widget(NanonisSpinBox, "ampValueValue")
+        self.amp_actual_min_label = self.widget(NanonisSpinBox, "ampActualMinValue")
+        self.amp_actual_max_label = self.widget(NanonisSpinBox, "ampActualMaxValue")
 
     def _configure_nanonis_spinboxes(self) -> None:
         """
@@ -449,6 +449,17 @@ class OscillationControlApp(QObject):
             (self.amp_upper, "V"),
         )
 
+        readbacks = (
+            (self.phase_error_label, "deg"),
+            (self.phase_shift_label, "Hz"),
+            (self.phase_value_label, "Hz"),
+            (self.amp_error_label, "V"),
+            (self.amp_shift_label, "V"),
+            (self.amp_value_label, "Vpk"),
+            (self.amp_actual_min_label, "Vpk"),
+            (self.amp_actual_max_label, "Vpk"),
+        )
+
         hint = (
             "Enter number + SI prefix only (for example 60m, 974.5k). "
             "The fixed base unit is shown in the label. Put the cursor "
@@ -460,6 +471,23 @@ class OscillationControlApp(QObject):
             control.setBaseUnit(base_unit)
             control.setDisplayDecimals(6)
             control.setToolTip(f"{hint} Base unit: {base_unit or '1'}.")
+
+        # Read-only MFLI values use the same numeric presentation as editable
+        # fields, but with the grey Nanonis-style readback appearance.
+        for control, base_unit in readbacks:
+            control.setBaseUnit(base_unit)
+            control.setDisplayDecimals(6)
+            control.setReadOnly(True)
+            control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            control.setStyleSheet(
+                "QDoubleSpinBox {"
+                " background-color: palette(midlight);"
+                " color: palette(text);"
+                " border: 1px solid palette(mid);"
+                " padding: 1px 3px;"
+                "}"
+            )
+            control.setToolTip(f"Live MFLI readback. Base unit: {base_unit}.")
 
     def _connect_gui_signals(self) -> None:
         self.connect_button.clicked.connect(
@@ -579,40 +607,28 @@ class OscillationControlApp(QObject):
 
             actual_min_v = float(s["amp_center_v"]) + float(s["amp_lower_v"])
             actual_max_v = float(s["amp_center_v"]) + float(s["amp_upper_v"])
-            self.amp_actual_min_label.setText(format_eng_number(actual_min_v))
-            self.amp_actual_max_label.setText(format_eng_number(actual_max_v))
+            self.amp_actual_min_label.setValue(actual_min_v)
+            self.amp_actual_max_label.setValue(actual_max_v)
         finally:
             self._updating_from_device = False
 
     @Slot(dict)
     def _apply_live(self, d: dict) -> None:
         if "phase_error" in d:
-            self.phase_error_label.setText(
-                format_eng_number(float(d["phase_error"]), show_plus=True)
-            )
+            self.phase_error_label.setValue(float(d["phase_error"]))
         if "phase_shift" in d:
-            self.phase_shift_label.setText(
-                format_eng_number(float(d["phase_shift"]), show_plus=True)
-            )
+            self.phase_shift_label.setValue(float(d["phase_shift"]))
         if "phase_value" in d:
-            self.phase_value_label.setText(
-                format_eng_number(float(d["phase_value"]))
-            )
+            self.phase_value_label.setValue(float(d["phase_value"]))
         if "phase_locked" in d:
             self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
 
         if "amp_error" in d:
-            self.amp_error_label.setText(
-                format_eng_number(float(d["amp_error"]), show_plus=True)
-            )
+            self.amp_error_label.setValue(float(d["amp_error"]))
         if "amp_shift" in d:
-            self.amp_shift_label.setText(
-                format_eng_number(float(d["amp_shift"]), show_plus=True)
-            )
+            self.amp_shift_label.setValue(float(d["amp_shift"]))
         if "amp_value" in d:
-            self.amp_value_label.setText(
-                format_eng_number(float(d["amp_value"]))
-            )
+            self.amp_value_label.setValue(float(d["amp_value"]))
 
     @Slot()
     def shutdown(self) -> None:
