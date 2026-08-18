@@ -361,6 +361,7 @@ class MFLIWorker(QObject):
             "amp_center_v": float(self.amplitude.center()),
             "amp_lower_v": float(self.amplitude.limitlower()),
             "amp_upper_v": float(self.amplitude.limitupper()),
+            "manual_output_amplitude_v": float(self.signal_output.amplitudes[0]()),
             "signal_output_on": int(self.signal_output.on()),
         }
 
@@ -417,6 +418,17 @@ class MFLIWorker(QObject):
 
             elif key == "amp_enable":
                 self.amplitude.enable(int(bool(value)), deep=True)
+            elif key == "manual_output_amplitude_v":
+                # Manual drive amplitude is only allowed while PID3 is off.
+                # This writes Signal Output 1 / Amplitude 1 directly.
+                if int(self.amplitude.enable()):
+                    self.warning.emit(
+                        "Manual output amplitude is unavailable while the "
+                        "Amplitude Controller (PID3) is enabled."
+                    )
+                    self.settings_updated.emit(self._read_settings())
+                    return
+                self.signal_output.amplitudes[0](float(value), deep=True)
             elif key == "amp_setpoint_v":
                 self.amplitude.setpoint(float(value), deep=True)
             elif key == "amp_p":
@@ -1428,7 +1440,6 @@ class OscillationControlApp(QObject):
             (self.amp_error_label, "V"),
             (self.amp_measured, "V"),
             (self.amp_shift_label, "V"),
-            (self.amp_value_label, "Vpk"),
             (self.amp_actual_min_label, "Vpk"),
             (self.amp_actual_max_label, "Vpk"),
         )
@@ -1460,6 +1471,52 @@ class OscillationControlApp(QObject):
             control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             control.setStyleSheet(readback_style)
             control.setToolTip(f"Live MFLI readback. Base unit: {base_unit}.")
+
+        # Output Amplitude is a readback while PID3 controls it, but becomes
+        # the manual Signal Output 1 / Amplitude 1 control when PID3 is off.
+        self.amp_value_label.setBaseUnit("Vpk")
+        self.amp_value_label.setDisplayDecimals(6)
+        self._set_amplitude_output_manual_mode(False)
+
+    def _set_amplitude_output_manual_mode(self, manual: bool) -> None:
+        """Switch Output Amplitude between live readback and manual control."""
+        connected = not self.connect_button.isEnabled()
+        editable = bool(manual and connected)
+
+        self.amp_value_label.setReadOnly(not editable)
+        self.amp_value_label.setFocusPolicy(
+            Qt.FocusPolicy.StrongFocus if editable else Qt.FocusPolicy.NoFocus
+        )
+
+        if editable:
+            self.amp_value_label.setStyleSheet("")
+            self.amp_value_label.setToolTip(
+                "Manual Signal Output 1 / Amplitude 1. Base unit: Vpk. "
+                "Changes are written immediately while the Amplitude Controller is off."
+            )
+        else:
+            self.amp_value_label.setStyleSheet(
+                "QDoubleSpinBox {"
+                " background-color: rgb(238, 238, 238);"
+                " color: palette(text);"
+                " border: 1px solid palette(mid);"
+                " padding: 1px 3px;"
+                "}"
+            )
+            self.amp_value_label.setToolTip(
+                "Live PID3 output-amplitude readback. Base unit: Vpk."
+            )
+
+    def _on_amp_enable_toggled(self, enabled: bool) -> None:
+        # Change the interaction state immediately in the GUI, then send the
+        # enable command to the MFLI worker.
+        self._set_amplitude_output_manual_mode(not enabled)
+        self._emit_if_user("amp_enable", enabled)
+
+    def _manual_output_amplitude_changed(self, value: float) -> None:
+        if self._updating_from_device or self.amp_enable.isChecked():
+            return
+        self.set_requested.emit("manual_output_amplitude_v", value)
 
     def _connect_gui_signals(self) -> None:
         self.connect_button.clicked.connect(self._connect_with_saved_settings)
@@ -1496,8 +1553,9 @@ class OscillationControlApp(QObject):
             lambda v: self._emit_if_user("phase_upper_hz", v)
         )
 
-        self.amp_enable.toggled.connect(
-            lambda v: self._emit_if_user("amp_enable", v)
+        self.amp_enable.toggled.connect(self._on_amp_enable_toggled)
+        self.amp_value_label.valueChanged.connect(
+            self._manual_output_amplitude_changed
         )
         self.amp_setpoint.valueChanged.connect(
             lambda v: self._emit_if_user("amp_setpoint_v", v)
@@ -1718,6 +1776,7 @@ class OscillationControlApp(QObject):
         self.connect_button.setEnabled(False)
         self.host_edit.setEnabled(False)
         self.serial_edit.setEnabled(False)
+        self._set_amplitude_output_manual_mode(not self.amp_enable.isChecked())
         self.statusbar.showMessage(
             f"Connected to {cfg.get('serial', 'MFLI')} — live updates active"
         )
@@ -1795,7 +1854,12 @@ class OscillationControlApp(QObject):
             self.phase_lower.setValue(float(s["phase_lower_hz"]))
             self.phase_upper.setValue(float(s["phase_upper_hz"]))
 
-            self.amp_enable.setChecked(bool(s["amp_enable"]))
+            amp_enabled = bool(s["amp_enable"])
+            self.amp_enable.setChecked(amp_enabled)
+            self._set_amplitude_output_manual_mode(not amp_enabled)
+            if not amp_enabled:
+                self.amp_value_label.setValue(float(s["manual_output_amplitude_v"]))
+
             self.amp_setpoint.setValue(float(s["amp_setpoint_v"]))
             self.amp_p.setValue(float(s["amp_p"]))
             self.amp_i.setValue(float(s["amp_i"]))
@@ -1833,7 +1897,7 @@ class OscillationControlApp(QObject):
             self.amp_measured.setValue(self.amp_setpoint.value() - amp_error)
         if "amp_shift" in d:
             self.amp_shift_label.setValue(float(d["amp_shift"]))
-        if "amp_value" in d:
+        if "amp_value" in d and self.amp_enable.isChecked():
             self.amp_value_label.setValue(float(d["amp_value"]))
 
     @Slot()
