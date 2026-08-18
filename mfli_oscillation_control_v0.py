@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 import time
+
+import yaml
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
@@ -28,6 +30,7 @@ from zhinst.toolkit import Session
 PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
+CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
 
 T = TypeVar("T", bound=QObject)
 
@@ -376,10 +379,12 @@ class OscillationControlApp(QObject):
     def __init__(self, ui_path: Path) -> None:
         super().__init__()
         self.window = load_ui(ui_path)
+        self.config_path = ui_path.with_name(CONNECTION_CONFIG_FILENAME)
         self._updating_from_device = False
         self._shutting_down = False
 
         self._bind_widgets()
+        self._load_connection_settings()
         self._configure_nanonis_spinboxes()
         self._connect_gui_signals()
         self._build_worker()
@@ -427,6 +432,47 @@ class OscillationControlApp(QObject):
         self.amp_value_label = self.widget(NanonisSpinBox, "ampValueValue")
         self.amp_actual_min_label = self.widget(NanonisSpinBox, "ampActualMinValue")
         self.amp_actual_max_label = self.widget(NanonisSpinBox, "ampActualMaxValue")
+
+    def _load_connection_settings(self) -> None:
+        """Load the last LabOne host and MFLI device name from YAML."""
+        if not self.config_path.exists():
+            return
+
+        try:
+            data = yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}
+            connection = data.get("connection", {})
+            host = str(connection.get("host", "")).strip()
+            device = str(connection.get("device", "")).strip()
+
+            if host:
+                self.host_edit.setText(host)
+            if device:
+                self.serial_edit.setText(device)
+        except Exception as exc:
+            self.statusbar.showMessage(
+                f"Could not load {self.config_path.name}: {type(exc).__name__}: {exc}",
+                12000,
+            )
+
+    def _save_connection_settings(self) -> None:
+        """Persist the current LabOne host and MFLI device name to YAML."""
+        data = {
+            "connection": {
+                "host": self.host_edit.text().strip(),
+                "device": self.serial_edit.text().strip(),
+            }
+        }
+
+        try:
+            self.config_path.write_text(
+                yaml.safe_dump(data, sort_keys=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            self.statusbar.showMessage(
+                f"Could not save {self.config_path.name}: {type(exc).__name__}: {exc}",
+                12000,
+            )
 
     def _configure_nanonis_spinboxes(self) -> None:
         """
@@ -491,11 +537,7 @@ class OscillationControlApp(QObject):
             control.setToolTip(f"Live MFLI readback. Base unit: {base_unit}.")
 
     def _connect_gui_signals(self) -> None:
-        self.connect_button.clicked.connect(
-            lambda: self.connect_requested.emit(
-                self.host_edit.text(), self.serial_edit.text()
-            )
-        )
+        self.connect_button.clicked.connect(self._connect_with_saved_settings)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
 
         self.phase_enable.toggled.connect(
@@ -543,6 +585,13 @@ class OscillationControlApp(QObject):
         )
         self.amp_upper.valueChanged.connect(
             lambda v: self._emit_if_user("amp_upper_v", v)
+        )
+
+    def _connect_with_saved_settings(self) -> None:
+        self._save_connection_settings()
+        self.connect_requested.emit(
+            self.host_edit.text(),
+            self.serial_edit.text(),
         )
 
     def _build_worker(self) -> None:
@@ -636,6 +685,7 @@ class OscillationControlApp(QObject):
         if self._shutting_down:
             return
         self._shutting_down = True
+        self._save_connection_settings()
         self.shutdown_requested.emit()
         self.worker_thread.quit()
         self.worker_thread.wait(1500)
