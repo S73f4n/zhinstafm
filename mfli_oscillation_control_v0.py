@@ -26,7 +26,7 @@ from zhinst.toolkit import Session
 
 PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
-UI_FILENAME = "mfli_oscillation_control_v0.ui"
+UI_FILENAME = "mfli_oscillation_control_v0_nanonis.ui"
 
 T = TypeVar("T", bound=QObject)
 
@@ -107,7 +107,7 @@ class MFLIWorker(QObject):
             return
 
         try:
-            self.session = Session(host, allow_version_mismatch=True)
+            self.session = Session(host)
             self.device = self.session.connect_device(serial)
 
             self.phase = self.device.pids[PHASE_PID_INDEX]
@@ -472,45 +472,48 @@ class OscillationControlApp(QObject):
         self.phase_enable.toggled.connect(
             lambda v: self._emit_if_user("phase_enable", v)
         )
-        self.phase_setpoint.editingFinished.connect(
-            lambda: self._emit_if_user("phase_setpoint_deg", self.phase_setpoint.value())
+        # valueChanged is immediate for wheel/Up/Down stepping. With
+        # keyboardTracking(False) in NanonisSpinBox, ordinary text entry is
+        # still committed only on Enter/focus change.
+        self.phase_setpoint.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_setpoint_deg", v)
         )
-        self.phase_p.editingFinished.connect(
-            lambda: self._emit_if_user("phase_p", self.phase_p.value())
+        self.phase_p.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_p", v)
         )
-        self.phase_i.editingFinished.connect(
-            lambda: self._emit_if_user("phase_i", self.phase_i.value())
+        self.phase_i.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_i", v)
         )
-        self.phase_center.editingFinished.connect(
-            lambda: self._emit_if_user("phase_center_hz", self.phase_center.value())
+        self.phase_center.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_center_hz", v)
         )
-        self.phase_lower.editingFinished.connect(
-            lambda: self._emit_if_user("phase_lower_hz", self.phase_lower.value())
+        self.phase_lower.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_lower_hz", v)
         )
-        self.phase_upper.editingFinished.connect(
-            lambda: self._emit_if_user("phase_upper_hz", self.phase_upper.value())
+        self.phase_upper.valueChanged.connect(
+            lambda v: self._emit_if_user("phase_upper_hz", v)
         )
 
         self.amp_enable.toggled.connect(
             lambda v: self._emit_if_user("amp_enable", v)
         )
-        self.amp_setpoint.editingFinished.connect(
-            lambda: self._emit_if_user("amp_setpoint_v", self.amp_setpoint.value())
+        self.amp_setpoint.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_setpoint_v", v)
         )
-        self.amp_p.editingFinished.connect(
-            lambda: self._emit_if_user("amp_p", self.amp_p.value())
+        self.amp_p.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_p", v)
         )
-        self.amp_i.editingFinished.connect(
-            lambda: self._emit_if_user("amp_i", self.amp_i.value())
+        self.amp_i.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_i", v)
         )
-        self.amp_center.editingFinished.connect(
-            lambda: self._emit_if_user("amp_center_v", self.amp_center.value())
+        self.amp_center.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_center_v", v)
         )
-        self.amp_lower.editingFinished.connect(
-            lambda: self._emit_if_user("amp_lower_v", self.amp_lower.value())
+        self.amp_lower.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_lower_v", v)
         )
-        self.amp_upper.editingFinished.connect(
-            lambda: self._emit_if_user("amp_upper_v", self.amp_upper.value())
+        self.amp_upper.valueChanged.connect(
+            lambda v: self._emit_if_user("amp_upper_v", v)
         )
 
     def _build_worker(self) -> None:
