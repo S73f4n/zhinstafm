@@ -537,14 +537,84 @@
            </property>
           </widget>
          </item>
-         <item row="2" column="0">
+         <item row="2" column="0" colspan="2">
+          <widget class="QWidget" name="ampSetpointSliderWidget" native="true">
+           <layout class="QHBoxLayout" name="ampSetpointSliderLayout">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <property name="spacing">
+             <number>4</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="ampSetpointSliderMin">
+              <property name="minimumSize">
+               <size><width>18</width><height>0</height></size>
+              </property>
+              <property name="text">
+               <string>0</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSlider" name="ampSetpointSlider">
+              <property name="minimum">
+               <number>0</number>
+              </property>
+              <property name="maximum">
+               <number>100000</number>
+              </property>
+              <property name="value">
+               <number>0</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="tracking">
+               <bool>true</bool>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">QSlider::groove:horizontal { height: 4px; background: palette(midlight); border: 1px solid palette(mid); }
+QSlider::handle:horizontal { width: 10px; margin: -5px 0; background: rgb(64, 170, 205); border: 1px solid rgb(90, 90, 90); }</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="ampSetpointSliderMax">
+              <property name="minimumSize">
+               <size><width>48</width><height>0</height></size>
+              </property>
+              <property name="text">
+               <string>1</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignLeft|Qt::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="3" column="0">
           <widget class="QLabel" name="ampErrorTitle">
            <property name="text">
             <string>Ampl. Error (V)</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
+         <item row="3" column="1">
           <widget class="NanonisSpinBox" name="ampErrorValue">
            <property name="minimum">
             <double>-1000000</double>
@@ -563,7 +633,7 @@
            </property>
           </widget>
          </item>
-         <item row="3" column="0" colspan="2">
+         <item row="4" column="0" colspan="2">
           <widget class="QFrame" name="signalLine">
            <property name="frameShape">
             <enum>QFrame::HLine</enum>
@@ -573,14 +643,14 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
+         <item row="5" column="0">
           <widget class="QLabel" name="phaseSetpointLabel">
            <property name="text">
             <string>Phase Ref. (deg)</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="1">
+         <item row="5" column="1">
           <widget class="NanonisSpinBox" name="phaseSetpoint">
            <property name="minimum">
             <double>-360</double>
@@ -599,14 +669,14 @@
            </property>
           </widget>
          </item>
-         <item row="5" column="0">
+         <item row="6" column="0">
           <widget class="QLabel" name="phaseMeasuredLabel">
            <property name="text">
             <string>Phase (deg)</string>
            </property>
           </widget>
          </item>
-         <item row="5" column="1">
+         <item row="6" column="1">
           <widget class="NanonisSpinBox" name="phaseMeasuredValue">
            <property name="minimum">
             <double>-1000000</double>
@@ -625,14 +695,14 @@
            </property>
           </widget>
          </item>
-         <item row="6" column="0">
+         <item row="7" column="0">
           <widget class="QLabel" name="phaseErrorTitle">
            <property name="text">
             <string>Phase Error (deg)</string>
            </property>
           </widget>
          </item>
-         <item row="6" column="1">
+         <item row="7" column="1">
           <widget class="NanonisSpinBox" name="phaseErrorValue">
            <property name="minimum">
             <double>-1000000</double>
@@ -651,7 +721,7 @@
            </property>
           </widget>
          </item>
-         <item row="7" column="0" colspan="2">
+         <item row="8" column="0" colspan="2">
           <spacer name="signalSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>

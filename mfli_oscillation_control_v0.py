@@ -25,13 +25,14 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QProgressBar,
+    QSlider,
     QSpinBox,
     QStatusBar,
     QWidget,
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisSpinBox
+from nanonis_spinbox import NanonisSpinBox, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -41,6 +42,7 @@ AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
 SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
+AMP_SETPOINT_SLIDER_STEPS = 100_000
 
 T = TypeVar("T", bound=QObject)
 
@@ -363,6 +365,7 @@ class MFLIWorker(QObject):
             "amp_upper_v": float(self.amplitude.limitupper()),
             "manual_output_amplitude_v": float(self.signal_output.amplitudes[0]()),
             "signal_output_on": int(self.signal_output.on()),
+            "input_range_v": float(self.device.sigins[0].range()),
         }
 
     def _validate_routing(self, cfg: dict[str, Any]) -> None:
@@ -1336,6 +1339,9 @@ class OscillationControlApp(QObject):
 
         # Signal / setpoint area
         self.amp_setpoint = self.widget(NanonisSpinBox, "ampSetpoint")
+        self.amp_setpoint_slider = self.widget(QSlider, "ampSetpointSlider")
+        self.amp_setpoint_slider_min = self.widget(QLabel, "ampSetpointSliderMin")
+        self.amp_setpoint_slider_max = self.widget(QLabel, "ampSetpointSliderMax")
         self.amp_measured = self.widget(NanonisSpinBox, "ampMeasuredValue")
         self.amp_error_label = self.widget(NanonisSpinBox, "ampErrorValue")
         self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
@@ -1478,6 +1484,67 @@ class OscillationControlApp(QObject):
         self.amp_value_label.setDisplayDecimals(6)
         self._set_amplitude_output_manual_mode(False)
 
+        # Nanonis-style amplitude-setpoint slider. Its physical range is
+        # updated from Signal Input 1's current input range when connected.
+        self._amp_setpoint_slider_max_v = 1.0
+        self.amp_setpoint_slider.setRange(0, AMP_SETPOINT_SLIDER_STEPS)
+        self.amp_setpoint_slider.setSingleStep(100)
+        self.amp_setpoint_slider.setPageStep(1000)
+        self.amp_setpoint_slider_min.setText("0")
+        self._update_amp_setpoint_slider_range(self._amp_setpoint_slider_max_v)
+
+    @staticmethod
+    def _compact_engineering_text(value: float) -> str:
+        """Engineering number + prefix, with trailing zeros removed."""
+        text = format_eng_number(float(value), decimals=3)
+        prefix = text[-1] if text and (text[-1].isalpha() or text[-1] in "µμ") else ""
+        number = text[:-1] if prefix else text
+        number = number.rstrip("0").rstrip(".")
+        if number in {"", "+", "-"}:
+            number += "0"
+        return number + prefix
+
+    def _update_amp_setpoint_slider_range(self, maximum_v: float) -> None:
+        """Set the amplitude slider's 0..max physical range in volts."""
+        maximum_v = float(maximum_v)
+        if not math.isfinite(maximum_v) or maximum_v <= 0.0:
+            maximum_v = max(abs(float(self.amp_setpoint.value())), 1e-3)
+
+        self._amp_setpoint_slider_max_v = maximum_v
+        self.amp_setpoint_slider_max.setText(
+            self._compact_engineering_text(maximum_v)
+        )
+        self._sync_amp_setpoint_slider(float(self.amp_setpoint.value()))
+
+    def _sync_amp_setpoint_slider(self, amplitude_v: float) -> None:
+        """Move the slider to match a base-unit amplitude without feedback."""
+        maximum_v = self._amp_setpoint_slider_max_v
+        if maximum_v <= 0.0:
+            return
+
+        fraction = min(1.0, max(0.0, float(amplitude_v) / maximum_v))
+        slider_value = round(fraction * AMP_SETPOINT_SLIDER_STEPS)
+        blocked = self.amp_setpoint_slider.blockSignals(True)
+        try:
+            self.amp_setpoint_slider.setValue(slider_value)
+        finally:
+            self.amp_setpoint_slider.blockSignals(blocked)
+
+    def _amp_setpoint_slider_changed(self, slider_value: int) -> None:
+        """Immediately apply slider motion through the normal setpoint path."""
+        if self._updating_from_device:
+            return
+
+        amplitude_v = (
+            float(slider_value) / AMP_SETPOINT_SLIDER_STEPS
+        ) * self._amp_setpoint_slider_max_v
+        self.amp_setpoint.setValue(amplitude_v)
+
+    def _amp_setpoint_changed(self, amplitude_v: float) -> None:
+        """Keep spinbox and slider synchronized and write the setpoint."""
+        self._sync_amp_setpoint_slider(amplitude_v)
+        self._emit_if_user("amp_setpoint_v", amplitude_v)
+
     def _set_amplitude_output_manual_mode(self, manual: bool) -> None:
         """Switch Output Amplitude between live readback and manual control."""
         connected = not self.connect_button.isEnabled()
@@ -1557,8 +1624,11 @@ class OscillationControlApp(QObject):
         self.amp_value_label.valueChanged.connect(
             self._manual_output_amplitude_changed
         )
+        self.amp_setpoint_slider.valueChanged.connect(
+            self._amp_setpoint_slider_changed
+        )
         self.amp_setpoint.valueChanged.connect(
-            lambda v: self._emit_if_user("amp_setpoint_v", v)
+            self._amp_setpoint_changed
         )
         self.amp_p.valueChanged.connect(
             lambda v: self._emit_if_user("amp_p", v)
@@ -1860,7 +1930,9 @@ class OscillationControlApp(QObject):
             if not amp_enabled:
                 self.amp_value_label.setValue(float(s["manual_output_amplitude_v"]))
 
+            self._update_amp_setpoint_slider_range(float(s["input_range_v"]))
             self.amp_setpoint.setValue(float(s["amp_setpoint_v"]))
+            self._sync_amp_setpoint_slider(float(s["amp_setpoint_v"]))
             self.amp_p.setValue(float(s["amp_p"]))
             self.amp_i.setValue(float(s["amp_i"]))
             self.amp_center.setValue(float(s["amp_center_v"]))
