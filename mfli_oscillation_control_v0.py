@@ -81,6 +81,9 @@ class MFLIWorker(QObject):
     advisor_started = Signal()
     advisor_finished = Signal(dict)
     advisor_failed = Signal(str)
+    amp_advisor_started = Signal()
+    amp_advisor_finished = Signal(dict)
+    amp_advisor_failed = Signal(str)
     warning = Signal(str)
 
     def __init__(self) -> None:
@@ -445,6 +448,124 @@ class MFLIWorker(QObject):
                 f"PLL Advisor failed: {type(exc).__name__}: {exc}"
             )
 
+    @Slot(float, float, float, float, float)
+    def advise_amplitude_pid(
+        self,
+        target_bw_hz: float,
+        q_factor: float,
+        gain_amp_per_exc: float,
+        resonant_frequency_hz: float,
+        delay_s: float,
+    ) -> None:
+        """Run the LabOne PID Advisor for PID3 and transfer the PI result.
+
+        This is the amplitude-control counterpart of the PLL1 advisor:
+          - controller index: PID3 / PID index 2
+          - advisor mode: PI (P + I optimization)
+          - DUT model: Resonator Amplitude
+          - model parameters: Gain, resonance frequency, Q and external delay
+
+        The present PID3 P/I values are used as optimization starting values.
+        Once advising finishes, LabOne's native ``To PID`` operation is used so
+        that the calculated coefficients are written directly to PID3.
+        """
+        if self.session is None or self.device is None:
+            self.amp_advisor_failed.emit("Not connected.")
+            return
+
+        if target_bw_hz <= 0:
+            self.amp_advisor_failed.emit(
+                "Amplitude Advisor target bandwidth must be > 0 Hz."
+            )
+            return
+        if q_factor <= 0:
+            self.amp_advisor_failed.emit("Amplitude Advisor Q factor must be > 0.")
+            return
+        if gain_amp_per_exc <= 0:
+            self.amp_advisor_failed.emit(
+                "Amplitude Advisor Amp./Exc. gain must be > 0."
+            )
+            return
+        if resonant_frequency_hz <= 0:
+            self.amp_advisor_failed.emit(
+                "Amplitude Advisor resonant frequency must be > 0 Hz."
+            )
+            return
+        if delay_s < 0:
+            self.amp_advisor_failed.emit(
+                "Amplitude Advisor delay must be >= 0 s."
+            )
+            return
+
+        self.amp_advisor_started.emit()
+
+        try:
+            advisor = self.session.modules.pid_advisor
+            advisor.device(self.device)
+            advisor.auto(False)
+            advisor.index(AMPLITUDE_PID_INDEX)
+
+            # PID mode is bit-coded: P=1, I=2 -> PI=3.
+            advisor.pid.mode(3)
+            advisor.pid.targetbw(float(target_bw_hz))
+
+            # DUT source 6 is the Resonator Amplitude model.
+            advisor.dut.source(6)
+            advisor.dut.delay(float(delay_s))
+            advisor.dut.gain(float(gain_amp_per_exc))
+            advisor.dut.fcenter(float(resonant_frequency_hz))
+            advisor.dut.q(float(q_factor))
+
+            # Use present PID3 values as the starting point and keep D disabled.
+            advisor.pid.p(float(self.amplitude.p()))
+            advisor.pid.i(float(self.amplitude.i()))
+            advisor.pid.d(0.0)
+
+            advisor.raw_module.execute()
+            advisor.calculate(1)
+            advisor.wait_done(timeout=60.0, sleep_time=0.1)
+
+            advised_p = float(advisor.pid.p())
+            advised_i = float(advisor.pid.i())
+
+            try:
+                achieved_bw = float(advisor.bw())
+            except Exception:
+                achieved_bw = float("nan")
+            try:
+                phase_margin = float(advisor.pm())
+            except Exception:
+                phase_margin = float("nan")
+
+            # Equivalent to LabOne's "To PID" button for selected PID3.
+            advisor.todevice(1)
+            self.session.sync()
+
+            applied_p = float(self.amplitude.p())
+            applied_i = float(self.amplitude.i())
+
+            self.settings_updated.emit(self._read_settings())
+            self.amp_advisor_finished.emit(
+                {
+                    "target_bw_hz": float(target_bw_hz),
+                    "q_factor": float(q_factor),
+                    "gain_amp_per_exc": float(gain_amp_per_exc),
+                    "resonant_frequency_hz": float(resonant_frequency_hz),
+                    "delay_s": float(delay_s),
+                    "advised_p": advised_p,
+                    "advised_i": advised_i,
+                    "applied_p": applied_p,
+                    "applied_i": applied_i,
+                    "achieved_bw_hz": achieved_bw,
+                    "phase_margin_deg": phase_margin,
+                }
+            )
+
+        except Exception as exc:
+            self.amp_advisor_failed.emit(
+                f"Amplitude Advisor failed: {type(exc).__name__}: {exc}"
+            )
+
     @Slot()
     def _poll_once(self) -> None:
         if self.session is None or self.device is None:
@@ -550,6 +671,7 @@ class OscillationControlApp(QObject):
     refresh_requested = Signal()
     center_requested = Signal()
     advise_requested = Signal(float, float, float, float)
+    amp_advise_requested = Signal(float, float, float, float, float)
     set_requested = Signal(str, object)
     shutdown_requested = Signal()
 
@@ -603,7 +725,10 @@ class OscillationControlApp(QObject):
         # PerfectPLL / PLL1 Advisor controls
         self.advisor_q = self.widget(NanonisSpinBox, "advisorQ")
         self.advisor_gain = self.widget(NanonisSpinBox, "advisorGain")
+        self.amp_advisor_target_bw = self.widget(NanonisSpinBox, "advisorAmpTargetBw")
         self.advisor_target_bw = self.widget(NanonisSpinBox, "advisorTargetBw")
+        self.amp_advisor_delay = self.widget(NanonisSpinBox, "advisorDelay")
+        self.amp_advise_button = self.widget(QPushButton, "adviseAmpButton")
         self.advise_button = self.widget(QPushButton, "adviseButton")
 
         # PLL / PID controllers
@@ -682,7 +807,9 @@ class OscillationControlApp(QObject):
             (self.amp_upper, "V"),
             (self.advisor_q, ""),
             (self.advisor_gain, "m/V"),
+            (self.amp_advisor_target_bw, "Hz"),
             (self.advisor_target_bw, "Hz"),
+            (self.amp_advisor_delay, "s"),
         )
 
         readbacks = (
@@ -730,6 +857,7 @@ class OscillationControlApp(QObject):
         self.connect_button.clicked.connect(self._connect_with_saved_settings)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.center_button.clicked.connect(self.center_requested.emit)
+        self.amp_advise_button.clicked.connect(self._request_amplitude_advice)
         self.advise_button.clicked.connect(self._request_phase_advice)
 
         self.signal_output_enable.toggled.connect(
@@ -801,15 +929,74 @@ class OscillationControlApp(QObject):
             self.statusbar.showMessage("Enter a resonant/center frequency > 0 Hz.", 8000)
             return
 
-        self.advise_button.setEnabled(False)
-        self.advise_button.setText("Advising...")
-        self.statusbar.showMessage("Running PLL1 PID Advisor in PI / Resonator Frequency mode...")
+        self._set_advisor_buttons_busy("phase")
+        self.statusbar.showMessage(
+            "Running PLL1 PID Advisor in PI / Resonator Frequency mode..."
+        )
         self.advise_requested.emit(
             target_bw,
             q_factor,
             gain,
             resonant_frequency,
         )
+
+    def _request_amplitude_advice(self) -> None:
+        """Validate shared resonator parameters and start PID3 advising."""
+        target_bw = float(self.amp_advisor_target_bw.value())
+        q_factor = float(self.advisor_q.value())
+        gain = float(self.advisor_gain.value())
+        resonant_frequency = float(self.phase_center.value())
+        delay = float(self.amp_advisor_delay.value())
+
+        if target_bw <= 0:
+            self.statusbar.showMessage(
+                "Enter an amplitude target bandwidth > 0 Hz.", 8000
+            )
+            return
+        if q_factor <= 0:
+            self.statusbar.showMessage("Enter a Q factor > 0.", 8000)
+            return
+        if gain <= 0:
+            self.statusbar.showMessage("Enter an Amp./Exc. gain > 0.", 8000)
+            return
+        if resonant_frequency <= 0:
+            self.statusbar.showMessage(
+                "Enter a resonant/center frequency > 0 Hz.", 8000
+            )
+            return
+        if delay < 0:
+            self.statusbar.showMessage("Enter an Advisor delay >= 0 s.", 8000)
+            return
+
+        self._set_advisor_buttons_busy("amplitude")
+        self.statusbar.showMessage(
+            "Running PID3 Advisor in PI / Resonator Amplitude mode..."
+        )
+        self.amp_advise_requested.emit(
+            target_bw,
+            q_factor,
+            gain,
+            resonant_frequency,
+            delay,
+        )
+
+    def _set_advisor_buttons_busy(self, active: str) -> None:
+        """Prevent overlapping PID Advisor jobs on the shared LabOne module."""
+        self.amp_advise_button.setEnabled(False)
+        self.advise_button.setEnabled(False)
+        self.amp_advise_button.setText(
+            "Advising..." if active == "amplitude" else "Advise Amp"
+        )
+        self.advise_button.setText(
+            "Advising..." if active == "phase" else "Advise Pha"
+        )
+
+    def _set_advisor_buttons_idle(self) -> None:
+        connected = not self.connect_button.isEnabled()
+        self.amp_advise_button.setEnabled(connected)
+        self.advise_button.setEnabled(connected)
+        self.amp_advise_button.setText("Advise Amp")
+        self.advise_button.setText("Advise Pha")
 
     def _connect_with_saved_settings(self) -> None:
         self._save_connection_settings()
@@ -827,6 +1014,7 @@ class OscillationControlApp(QObject):
         self.refresh_requested.connect(self.worker.refresh_settings)
         self.center_requested.connect(self.worker.center_phase_frequency)
         self.advise_requested.connect(self.worker.advise_phase_pll)
+        self.amp_advise_requested.connect(self.worker.advise_amplitude_pid)
         self.set_requested.connect(self.worker.set_parameter)
         self.shutdown_requested.connect(self.worker.shutdown)
 
@@ -837,6 +1025,9 @@ class OscillationControlApp(QObject):
         self.worker.advisor_started.connect(self._on_advisor_started)
         self.worker.advisor_finished.connect(self._on_advisor_finished)
         self.worker.advisor_failed.connect(self._on_advisor_failed)
+        self.worker.amp_advisor_started.connect(self._on_amp_advisor_started)
+        self.worker.amp_advisor_finished.connect(self._on_amp_advisor_finished)
+        self.worker.amp_advisor_failed.connect(self._on_amp_advisor_failed)
         self.worker.warning.connect(self._show_warning)
 
         self.worker_thread.finished.connect(self.worker.deleteLater)
@@ -850,6 +1041,7 @@ class OscillationControlApp(QObject):
     def _on_connected(self, cfg: dict) -> None:
         self.refresh_button.setEnabled(True)
         self.center_button.setEnabled(True)
+        self.amp_advise_button.setEnabled(True)
         self.advise_button.setEnabled(True)
         self.connect_button.setEnabled(False)
         self.host_edit.setEnabled(False)
@@ -860,13 +1052,11 @@ class OscillationControlApp(QObject):
 
     @Slot()
     def _on_advisor_started(self) -> None:
-        self.advise_button.setEnabled(False)
-        self.advise_button.setText("Advising...")
+        self._set_advisor_buttons_busy("phase")
 
     @Slot(dict)
     def _on_advisor_finished(self, result: dict) -> None:
-        self.advise_button.setEnabled(True)
-        self.advise_button.setText("Advise")
+        self._set_advisor_buttons_idle()
 
         bw = float(result.get("achieved_bw_hz", float("nan")))
         pm = float(result.get("phase_margin_deg", float("nan")))
@@ -882,9 +1072,32 @@ class OscillationControlApp(QObject):
 
     @Slot(str)
     def _on_advisor_failed(self, message: str) -> None:
-        # The Connect button is disabled while an instrument connection is active.
-        self.advise_button.setEnabled(not self.connect_button.isEnabled())
-        self.advise_button.setText("Advise")
+        self._set_advisor_buttons_idle()
+        self.statusbar.showMessage(message, 15000)
+
+    @Slot()
+    def _on_amp_advisor_started(self) -> None:
+        self._set_advisor_buttons_busy("amplitude")
+
+    @Slot(dict)
+    def _on_amp_advisor_finished(self, result: dict) -> None:
+        self._set_advisor_buttons_idle()
+
+        bw = float(result.get("achieved_bw_hz", float("nan")))
+        pm = float(result.get("phase_margin_deg", float("nan")))
+        p = float(result.get("applied_p", float("nan")))
+        i = float(result.get("applied_i", float("nan")))
+
+        details = f"PID3 Amplitude Advisor applied P={p:.6g}, I={i:.6g}"
+        if bw == bw:
+            details += f", BW={bw:.6g} Hz"
+        if pm == pm:
+            details += f", PM={pm:.3g} deg"
+        self.statusbar.showMessage(details, 15000)
+
+    @Slot(str)
+    def _on_amp_advisor_failed(self, message: str) -> None:
+        self._set_advisor_buttons_idle()
         self.statusbar.showMessage(message, 15000)
 
     @Slot(str)

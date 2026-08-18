@@ -700,21 +700,11 @@
             </item>
             <item row="0" column="1">
              <widget class="NanonisSpinBox" name="advisorQ">
-              <property name="minimum">
-               <double>0</double>
-              </property>
-              <property name="maximum">
-               <double>1000000000000.0</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
+              <property name="minimum"><double>0</double></property>
+              <property name="maximum"><double>1000000000000.0</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
              </widget>
             </item>
             <item row="0" column="2">
@@ -726,21 +716,28 @@
             </item>
             <item row="0" column="3">
              <widget class="NanonisSpinBox" name="advisorGain">
-              <property name="minimum">
-               <double>-1000000000000.0</double>
+              <property name="minimum"><double>-1000000000000.0</double></property>
+              <property name="maximum"><double>1000000000000.0</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+             </widget>
+            </item>
+
+            <item row="1" column="0">
+             <widget class="QLabel" name="advisorAmpTargetBwLabel">
+              <property name="text">
+               <string>BW Amp (Hz)</string>
               </property>
-              <property name="maximum">
-               <double>1000000000000.0</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="NanonisSpinBox" name="advisorAmpTargetBw">
+              <property name="minimum"><double>0</double></property>
+              <property name="maximum"><double>1000000000.0</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
              </widget>
             </item>
             <item row="1" column="2">
@@ -752,31 +749,40 @@
             </item>
             <item row="1" column="3">
              <widget class="NanonisSpinBox" name="advisorTargetBw">
-              <property name="minimum">
-               <double>0</double>
+              <property name="minimum"><double>0</double></property>
+              <property name="maximum"><double>1000000000.0</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+             </widget>
+            </item>
+
+            <item row="2" column="0">
+             <widget class="QLabel" name="advisorDelayLabel">
+              <property name="text">
+               <string>Delay (s)</string>
               </property>
-              <property name="maximum">
-               <double>1000000000.0</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="NanonisSpinBox" name="advisorDelay">
+              <property name="minimum"><double>0</double></property>
+              <property name="maximum"><double>1000.0</double></property>
+              <property name="decimals"><number>15</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+             </widget>
+            </item>
+            <item row="2" column="2">
+             <widget class="QPushButton" name="adviseAmpButton">
+              <property name="enabled"><bool>false</bool></property>
+              <property name="text"><string>Advise Amp</string></property>
              </widget>
             </item>
             <item row="2" column="3">
              <widget class="QPushButton" name="adviseButton">
-              <property name="enabled">
-               <bool>false</bool>
-              </property>
-              <property name="text">
-               <string>Advise</string>
-              </property>
+              <property name="enabled"><bool>false</bool></property>
+              <property name="text"><string>Advise Pha</string></property>
              </widget>
             </item>
            </layout>
