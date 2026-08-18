@@ -295,6 +295,9 @@
          </item>
          <item row="7" column="1">
           <widget class="NanonisSpinBox" name="phaseErrorValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -319,9 +322,6 @@
            <property name="keyboardTracking">
             <bool>false</bool>
            </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
-           </property>
           </widget>
          </item>
          <item row="8" column="0">
@@ -333,6 +333,9 @@
          </item>
          <item row="8" column="1">
           <widget class="NanonisSpinBox" name="phaseShiftValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -357,9 +360,6 @@
            <property name="keyboardTracking">
             <bool>false</bool>
            </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
-           </property>
           </widget>
          </item>
          <item row="9" column="0">
@@ -371,6 +371,9 @@
          </item>
          <item row="9" column="1">
           <widget class="NanonisSpinBox" name="phaseValueValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -394,9 +397,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
@@ -638,6 +638,9 @@
          </item>
          <item row="7" column="1">
           <widget class="NanonisSpinBox" name="ampErrorValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -661,9 +664,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
@@ -676,6 +676,9 @@
          </item>
          <item row="8" column="1">
           <widget class="NanonisSpinBox" name="ampShiftValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -699,9 +702,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
@@ -714,6 +714,9 @@
          </item>
          <item row="9" column="1">
           <widget class="NanonisSpinBox" name="ampValueValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -737,9 +740,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
@@ -752,6 +752,9 @@
          </item>
          <item row="10" column="1">
           <widget class="NanonisSpinBox" name="ampActualMinValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -775,9 +778,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
@@ -790,6 +790,9 @@
          </item>
          <item row="11" column="1">
           <widget class="NanonisSpinBox" name="ampActualMaxValue">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(238, 238, 238);</string>
+           </property>
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -813,9 +816,6 @@
            </property>
            <property name="keyboardTracking">
             <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string>QDoubleSpinBox { background-color: palette(midlight); color: palette(text); border: 1px solid palette(mid); padding: 1px 3px; }</string>
            </property>
           </widget>
          </item>
