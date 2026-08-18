@@ -11,7 +11,6 @@ from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QDoubleSpinBox,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -19,6 +18,8 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QWidget,
 )
+
+from si_spinbox_v0 import SISpinBox, format_si
 
 from zhinst.toolkit import Session
 
@@ -242,18 +243,18 @@ class MFLIWorker(QObject):
 
             elif key == "amp_enable":
                 self.amplitude.enable(int(bool(value)), deep=True)
-            elif key == "amp_setpoint_mv":
-                self.amplitude.setpoint(float(value) * 1e-3, deep=True)
+            elif key == "amp_setpoint_v":
+                self.amplitude.setpoint(float(value), deep=True)
             elif key == "amp_p":
                 self.amplitude.p(float(value), deep=True)
             elif key == "amp_i":
                 self.amplitude.i(float(value), deep=True)
-            elif key == "amp_center_mv":
-                self.amplitude.center(float(value) * 1e-3, deep=True)
-            elif key == "amp_lower_mv":
-                self.amplitude.limitlower(float(value) * 1e-3, deep=True)
-            elif key == "amp_upper_mv":
-                self.amplitude.limitupper(float(value) * 1e-3, deep=True)
+            elif key == "amp_center_v":
+                self.amplitude.center(float(value), deep=True)
+            elif key == "amp_lower_v":
+                self.amplitude.limitlower(float(value), deep=True)
+            elif key == "amp_upper_v":
+                self.amplitude.limitupper(float(value), deep=True)
             else:
                 raise KeyError(f"Unknown parameter {key!r}")
 
@@ -345,6 +346,7 @@ def load_ui(path: Path) -> QMainWindow:
         raise RuntimeError(f"Could not open UI file: {path}")
 
     loader = QUiLoader()
+    loader.registerCustomWidget(SISpinBox)
     try:
         window = loader.load(ui_file)
     finally:
@@ -361,7 +363,7 @@ class OscillationControlApp(QObject):
     """
     Controller/glue layer for the Designer UI.
 
-    The .ui file owns layout, labels, ranges, suffixes and visual design.
+    The .ui file owns layout, labels, ranges and visual design.
     This class only finds widgets by objectName and connects them to the MFLI.
     """
 
@@ -377,6 +379,7 @@ class OscillationControlApp(QObject):
         self._shutting_down = False
 
         self._bind_widgets()
+        self._configure_si_spinboxes()
         self._connect_gui_signals()
         self._build_worker()
 
@@ -399,12 +402,12 @@ class OscillationControlApp(QObject):
 
         # PLL 1
         self.phase_enable = self.widget(QCheckBox, "phaseEnable")
-        self.phase_setpoint = self.widget(QDoubleSpinBox, "phaseSetpoint")
-        self.phase_p = self.widget(QDoubleSpinBox, "phaseP")
-        self.phase_i = self.widget(QDoubleSpinBox, "phaseI")
-        self.phase_center = self.widget(QDoubleSpinBox, "phaseCenter")
-        self.phase_lower = self.widget(QDoubleSpinBox, "phaseLower")
-        self.phase_upper = self.widget(QDoubleSpinBox, "phaseUpper")
+        self.phase_setpoint = self.widget(SISpinBox, "phaseSetpoint")
+        self.phase_p = self.widget(SISpinBox, "phaseP")
+        self.phase_i = self.widget(SISpinBox, "phaseI")
+        self.phase_center = self.widget(SISpinBox, "phaseCenter")
+        self.phase_lower = self.widget(SISpinBox, "phaseLower")
+        self.phase_upper = self.widget(SISpinBox, "phaseUpper")
         self.phase_error_label = self.widget(QLabel, "phaseErrorValue")
         self.phase_shift_label = self.widget(QLabel, "phaseShiftValue")
         self.phase_value_label = self.widget(QLabel, "phaseValueValue")
@@ -412,17 +415,50 @@ class OscillationControlApp(QObject):
 
         # PID 3
         self.amp_enable = self.widget(QCheckBox, "ampEnable")
-        self.amp_setpoint = self.widget(QDoubleSpinBox, "ampSetpoint")
-        self.amp_p = self.widget(QDoubleSpinBox, "ampP")
-        self.amp_i = self.widget(QDoubleSpinBox, "ampI")
-        self.amp_center = self.widget(QDoubleSpinBox, "ampCenter")
-        self.amp_lower = self.widget(QDoubleSpinBox, "ampLower")
-        self.amp_upper = self.widget(QDoubleSpinBox, "ampUpper")
+        self.amp_setpoint = self.widget(SISpinBox, "ampSetpoint")
+        self.amp_p = self.widget(SISpinBox, "ampP")
+        self.amp_i = self.widget(SISpinBox, "ampI")
+        self.amp_center = self.widget(SISpinBox, "ampCenter")
+        self.amp_lower = self.widget(SISpinBox, "ampLower")
+        self.amp_upper = self.widget(SISpinBox, "ampUpper")
         self.amp_error_label = self.widget(QLabel, "ampErrorValue")
         self.amp_shift_label = self.widget(QLabel, "ampShiftValue")
         self.amp_value_label = self.widget(QLabel, "ampValueValue")
         self.amp_actual_min_label = self.widget(QLabel, "ampActualMinValue")
         self.amp_actual_max_label = self.widget(QLabel, "ampActualMaxValue")
+
+    def _configure_si_spinboxes(self) -> None:
+        """
+        Configure the BASE SI unit for each numeric field.
+
+        SISpinBox.value() always returns the value in this base unit. Thus a
+        control displaying "60.000000 mV" returns 0.060 from value().
+        """
+        controls = (
+            (self.phase_setpoint, "deg"),
+            (self.phase_p, "Hz/deg"),
+            (self.phase_i, "Hz/(deg·s)"),
+            (self.phase_center, "Hz"),
+            (self.phase_lower, "Hz"),
+            (self.phase_upper, "Hz"),
+            (self.amp_setpoint, "V"),
+            (self.amp_p, ""),
+            (self.amp_i, "1/s"),
+            (self.amp_center, "V"),
+            (self.amp_lower, "V"),
+            (self.amp_upper, "V"),
+        )
+
+        hint = (
+            "SI prefixes accepted: p, n, u/µ, m, k, M, G, etc. "
+            "Put the cursor immediately before a digit and use the mouse "
+            "wheel or Up/Down to change that digit."
+        )
+
+        for control, unit in controls:
+            control.setUnit(unit)
+            control.setDisplayDecimals(6)
+            control.setToolTip(hint)
 
     def _connect_gui_signals(self) -> None:
         self.connect_button.clicked.connect(
@@ -458,7 +494,7 @@ class OscillationControlApp(QObject):
             lambda v: self._emit_if_user("amp_enable", v)
         )
         self.amp_setpoint.editingFinished.connect(
-            lambda: self._emit_if_user("amp_setpoint_mv", self.amp_setpoint.value())
+            lambda: self._emit_if_user("amp_setpoint_v", self.amp_setpoint.value())
         )
         self.amp_p.editingFinished.connect(
             lambda: self._emit_if_user("amp_p", self.amp_p.value())
@@ -467,13 +503,13 @@ class OscillationControlApp(QObject):
             lambda: self._emit_if_user("amp_i", self.amp_i.value())
         )
         self.amp_center.editingFinished.connect(
-            lambda: self._emit_if_user("amp_center_mv", self.amp_center.value())
+            lambda: self._emit_if_user("amp_center_v", self.amp_center.value())
         )
         self.amp_lower.editingFinished.connect(
-            lambda: self._emit_if_user("amp_lower_mv", self.amp_lower.value())
+            lambda: self._emit_if_user("amp_lower_v", self.amp_lower.value())
         )
         self.amp_upper.editingFinished.connect(
-            lambda: self._emit_if_user("amp_upper_mv", self.amp_upper.value())
+            lambda: self._emit_if_user("amp_upper_v", self.amp_upper.value())
         )
 
     def _build_worker(self) -> None:
@@ -530,37 +566,49 @@ class OscillationControlApp(QObject):
             self.phase_upper.setValue(float(s["phase_upper_hz"]))
 
             self.amp_enable.setChecked(bool(s["amp_enable"]))
-            self.amp_setpoint.setValue(float(s["amp_setpoint_v"]) * 1e3)
+            self.amp_setpoint.setValue(float(s["amp_setpoint_v"]))
             self.amp_p.setValue(float(s["amp_p"]))
             self.amp_i.setValue(float(s["amp_i"]))
-            self.amp_center.setValue(float(s["amp_center_v"]) * 1e3)
-            self.amp_lower.setValue(float(s["amp_lower_v"]) * 1e3)
-            self.amp_upper.setValue(float(s["amp_upper_v"]) * 1e3)
+            self.amp_center.setValue(float(s["amp_center_v"]))
+            self.amp_lower.setValue(float(s["amp_lower_v"]))
+            self.amp_upper.setValue(float(s["amp_upper_v"]))
 
-            actual_min_mv = (float(s["amp_center_v"]) + float(s["amp_lower_v"])) * 1e3
-            actual_max_mv = (float(s["amp_center_v"]) + float(s["amp_upper_v"])) * 1e3
-            self.amp_actual_min_label.setText(f"{actual_min_mv:.6f} mV")
-            self.amp_actual_max_label.setText(f"{actual_max_mv:.6f} mV")
+            actual_min_v = float(s["amp_center_v"]) + float(s["amp_lower_v"])
+            actual_max_v = float(s["amp_center_v"]) + float(s["amp_upper_v"])
+            self.amp_actual_min_label.setText(format_si(actual_min_v, "Vpk"))
+            self.amp_actual_max_label.setText(format_si(actual_max_v, "Vpk"))
         finally:
             self._updating_from_device = False
 
     @Slot(dict)
     def _apply_live(self, d: dict) -> None:
         if "phase_error" in d:
-            self.phase_error_label.setText(f"{d['phase_error']:.6f} deg")
+            self.phase_error_label.setText(
+                format_si(float(d["phase_error"]), "deg", show_plus=True)
+            )
         if "phase_shift" in d:
-            self.phase_shift_label.setText(f"{d['phase_shift']:+.6f} Hz")
+            self.phase_shift_label.setText(
+                format_si(float(d["phase_shift"]), "Hz", show_plus=True)
+            )
         if "phase_value" in d:
-            self.phase_value_label.setText(f"{d['phase_value']:.6f} Hz")
+            self.phase_value_label.setText(
+                format_si(float(d["phase_value"]), "Hz")
+            )
         if "phase_locked" in d:
             self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
 
         if "amp_error" in d:
-            self.amp_error_label.setText(f"{d['amp_error'] * 1e3:+.6f} mV")
+            self.amp_error_label.setText(
+                format_si(float(d["amp_error"]), "V", show_plus=True)
+            )
         if "amp_shift" in d:
-            self.amp_shift_label.setText(f"{d['amp_shift'] * 1e3:+.6f} mV")
+            self.amp_shift_label.setText(
+                format_si(float(d["amp_shift"]), "Vpk", show_plus=True)
+            )
         if "amp_value" in d:
-            self.amp_value_label.setText(f"{d['amp_value'] * 1e3:.6f} mVpk")
+            self.amp_value_label.setText(
+                format_si(float(d["amp_value"]), "Vpk")
+            )
 
     @Slot()
     def shutdown(self) -> None:

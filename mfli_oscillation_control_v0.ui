@@ -102,12 +102,11 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QDoubleSpinBox" name="phaseSetpoint">
+          <widget class="SISpinBox" name="phaseSetpoint">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-360.000000000000000</double></property>
            <property name="maximum"><double>360.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> deg</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -117,12 +116,11 @@
           </widget>
          </item>
          <item row="2" column="1">
-          <widget class="QDoubleSpinBox" name="phaseP">
+          <widget class="SISpinBox" name="phaseP">
            <property name="decimals"><number>9</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
            <property name="singleStep"><double>0.010000000000000</double></property>
-           <property name="suffix"><string> Hz/deg</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -132,12 +130,11 @@
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="QDoubleSpinBox" name="phaseI">
+          <widget class="SISpinBox" name="phaseI">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000000.000000000000000</double></property>
            <property name="singleStep"><double>1.000000000000000</double></property>
-           <property name="suffix"><string> Hz/(deg·s)</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -147,12 +144,11 @@
           </widget>
          </item>
          <item row="4" column="1">
-          <widget class="QDoubleSpinBox" name="phaseCenter">
+          <widget class="SISpinBox" name="phaseCenter">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>0.000000000000000</double></property>
            <property name="maximum"><double>10000000000.000000000000000</double></property>
            <property name="singleStep"><double>1.000000000000000</double></property>
-           <property name="suffix"><string> Hz</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -162,12 +158,11 @@
           </widget>
          </item>
          <item row="5" column="1">
-          <widget class="QDoubleSpinBox" name="phaseLower">
+          <widget class="SISpinBox" name="phaseLower">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
            <property name="singleStep"><double>1.000000000000000</double></property>
-           <property name="suffix"><string> Hz</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -177,12 +172,11 @@
           </widget>
          </item>
          <item row="6" column="1">
-          <widget class="QDoubleSpinBox" name="phaseUpper">
+          <widget class="SISpinBox" name="phaseUpper">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
            <property name="singleStep"><double>1.000000000000000</double></property>
-           <property name="suffix"><string> Hz</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -251,12 +245,11 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QDoubleSpinBox" name="ampSetpoint">
-           <property name="decimals"><number>6</number></property>
+          <widget class="SISpinBox" name="ampSetpoint">
+           <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> mV</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -266,12 +259,11 @@
           </widget>
          </item>
          <item row="2" column="1">
-          <widget class="QDoubleSpinBox" name="ampP">
+          <widget class="SISpinBox" name="ampP">
            <property name="decimals"><number>9</number></property>
            <property name="minimum"><double>-1000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000.000000000000000</double></property>
            <property name="singleStep"><double>0.001000000000000</double></property>
-           <property name="suffix"><string> V/V</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -281,12 +273,11 @@
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="QDoubleSpinBox" name="ampI">
+          <widget class="SISpinBox" name="ampI">
            <property name="decimals"><number>6</number></property>
            <property name="minimum"><double>-1000000000000.000000000000000</double></property>
            <property name="maximum"><double>1000000000000.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> 1/s</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -296,12 +287,11 @@
           </widget>
          </item>
          <item row="4" column="1">
-          <widget class="QDoubleSpinBox" name="ampCenter">
-           <property name="decimals"><number>6</number></property>
+          <widget class="SISpinBox" name="ampCenter">
+           <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> mV</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -311,12 +301,11 @@
           </widget>
          </item>
          <item row="5" column="1">
-          <widget class="QDoubleSpinBox" name="ampLower">
-           <property name="decimals"><number>6</number></property>
+          <widget class="SISpinBox" name="ampLower">
+           <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> mV</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -326,12 +315,11 @@
           </widget>
          </item>
          <item row="6" column="1">
-          <widget class="QDoubleSpinBox" name="ampUpper">
-           <property name="decimals"><number>6</number></property>
+          <widget class="SISpinBox" name="ampUpper">
+           <property name="decimals"><number>12</number></property>
            <property name="minimum"><double>-1000000.000000000000000</double></property>
            <property name="maximum"><double>1000000.000000000000000</double></property>
            <property name="singleStep"><double>0.100000000000000</double></property>
-           <property name="suffix"><string> mV</string></property>
            <property name="keyboardTracking"><bool>false</bool></property>
           </widget>
          </item>
@@ -394,6 +382,13 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SISpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>si_spinbox_v0.py</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
