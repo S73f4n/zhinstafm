@@ -107,7 +107,7 @@ class MFLIWorker(QObject):
             return
 
         try:
-            self.session = Session(host)
+            self.session = Session(host, allow_version_mismatch=True)
             self.device = self.session.connect_device(serial)
 
             self.phase = self.device.pids[PHASE_PID_INDEX]
