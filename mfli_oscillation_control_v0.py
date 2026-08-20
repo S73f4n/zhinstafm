@@ -4,6 +4,7 @@ import math
 import sys
 import threading
 import time
+from collections import deque
 
 import numpy as np
 import yaml
@@ -47,6 +48,14 @@ SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
 AMP_SETPOINT_SLIDER_STEPS = 100_000
 
+# Host-side averaging. The MFLI PLL itself continues running at its hardware
+# update rate; these windows only affect the displayed/centered values.
+CENTER_AVERAGE_STREAM_SAMPLES = 32
+CENTER_AVERAGE_MIN_S = 0.020
+CENTER_AVERAGE_MAX_S = 0.500
+CENTER_AVERAGE_FALLBACK_S = 0.050
+AMP_ERROR_RMS_WINDOW_S = 0.250
+
 T = TypeVar("T", bound=QObject)
 
 
@@ -66,6 +75,23 @@ def _last_scalar(payload: Any) -> float | None:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+
+def _values_array(payload: Any) -> np.ndarray:
+    """Return all finite numeric values from a Toolkit poll payload."""
+    if payload is None:
+        return np.empty(0, dtype=float)
+
+    value = payload.get("value") if isinstance(payload, dict) else payload
+    if value is None:
+        return np.empty(0, dtype=float)
+
+    try:
+        arr = np.asarray(value, dtype=float).reshape(-1)
+    except (TypeError, ValueError):
+        return np.empty(0, dtype=float)
+
+    return arr[np.isfinite(arr)]
 
 
 
@@ -262,6 +288,7 @@ class MFLIWorker(QObject):
         self._last_amplitude_stream = 0.0
         self._last_lock_read = 0.0
         self._stream_nodes: dict[str, Any] = {}
+        self._amp_error_history: deque[tuple[float, float]] = deque()
         self._sweep_abort = threading.Event()
         self._sweep_running = False
 
@@ -305,6 +332,7 @@ class MFLIWorker(QObject):
             self._last_phase_stream = 0.0
             self._last_amplitude_stream = 0.0
             self._last_lock_read = 0.0
+            self._amp_error_history.clear()
 
             self._start_timer()
 
@@ -460,28 +488,100 @@ class MFLIWorker(QObject):
                 pass
 
 
+    def _center_average_duration(self, frequency_hz: float) -> float:
+        """Choose a short averaging window that contains many fresh stream samples.
+
+        At AFM resonance frequencies a literal handful of mechanical periods is
+        much shorter than the PID stream sampling interval sent to the PC.  The
+        useful host-side criterion is therefore a few dozen PLL output samples.
+        The resulting window still spans many oscillation periods while remaining
+        short compared with normal PLL dynamics.
+        """
+        durations = [CENTER_AVERAGE_FALLBACK_S]
+
+        if math.isfinite(frequency_hz) and abs(frequency_hz) > 0.0:
+            # Never average for less than 16 actual oscillation periods.
+            durations.append(16.0 / abs(frequency_hz))
+
+        try:
+            stream_rate = float(self.phase.stream.rate())
+            if math.isfinite(stream_rate) and stream_rate > 0.0:
+                durations.append(CENTER_AVERAGE_STREAM_SAMPLES / stream_rate)
+        except Exception:
+            pass
+
+        return min(
+            CENTER_AVERAGE_MAX_S,
+            max(CENTER_AVERAGE_MIN_S, max(durations)),
+        )
+
+    def _collect_phase_frequency_average(self) -> tuple[float, int, float]:
+        """Collect fresh PLL1 output samples and return (mean, N, duration)."""
+        scalar_frequency = float(self.phase.value())
+        duration_s = self._center_average_duration(scalar_frequency)
+
+        samples = np.empty(0, dtype=float)
+
+        # phase.stream.value is already subscribed for the live display.  A poll
+        # here runs in the same worker thread as the ordinary poll timer, so there
+        # is no concurrent access to the Session.  First drain a tiny slice so the
+        # averaging window predominantly contains samples acquired after the click.
+        try:
+            self.session.poll(recording_time=0.001, timeout=0.05)
+        except Exception:
+            pass
+
+        try:
+            data = self.session.poll(
+                recording_time=duration_s,
+                timeout=max(0.20, duration_s * 3.0),
+            )
+            samples = _values_array(data.get(self.phase.stream.value))
+        except Exception:
+            samples = np.empty(0, dtype=float)
+
+        # If PID streaming is disabled or too slow, fall back to several direct
+        # scalar reads. This is slower than streaming but still avoids a single
+        # momentary Center value.
+        if samples.size < 3:
+            direct: list[float] = []
+            n_reads = 8
+            sleep_s = max(0.002, duration_s / n_reads)
+            for i in range(n_reads):
+                try:
+                    value = float(self.phase.value())
+                    if math.isfinite(value):
+                        direct.append(value)
+                except Exception:
+                    pass
+                if i + 1 < n_reads:
+                    time.sleep(sleep_s)
+            samples = np.asarray(direct, dtype=float)
+
+        if samples.size == 0:
+            raise RuntimeError('No valid PLL1 frequency samples were available for centering.')
+
+        return float(np.mean(samples)), int(samples.size), float(duration_s)
+
     @Slot()
     def center_phase_frequency(self) -> None:
-        """Rebase PLL1 Center onto the current PLL output without unlocking.
+        """Rebase PLL1 Center onto an averaged current PLL output.
 
-        The current MFLI PID node tree no longer exposes the historic
-        AUTOCENTER command.  The least intrusive equivalent is therefore to
-        copy the present PID output (Value) into Center while leaving PLL1
-        continuously enabled.  We deliberately do not toggle ENABLE, KEEPINT,
-        or any PID gain here.
-
-        After the write we read Shift back.  A non-negligible residual is only
-        reported; this routine never falls back to restarting the PLL.
+        PLL1 remains continuously enabled.  Instead of copying one momentary
+        Value sample, we average a short block of fresh PID-stream samples and
+        use that mean frequency as the new Center.
         """
         if self.device is None:
             self.warning.emit("Not connected.")
             return
 
         try:
-            current_frequency = float(self.phase.value())
+            averaged_frequency, sample_count, duration_s = (
+                self._collect_phase_frequency_average()
+            )
 
-            # One synchronous setting write.  PLL1 remains enabled throughout.
-            self.phase.center(current_frequency, deep=True)
+            # One synchronous setting write. PLL1 remains enabled throughout.
+            self.phase.center(averaged_frequency, deep=True)
 
             center = float(self.phase.center())
             shift = float(self.phase.shift())
@@ -495,9 +595,11 @@ class MFLIWorker(QObject):
                 }
             )
 
-            # A small finite residual can occur because the PLL continues to
-            # evolve while the write/readback crosses the Data Server.  Flag
-            # only a clearly visible residual; do not disturb the controller.
+            self.warning.emit(
+                f"Center set to {center:.9g} Hz from the mean of "
+                f"{sample_count} PLL samples over {duration_s * 1e3:.1f} ms."
+            )
+
             tolerance_hz = max(1e-6, abs(value) * 1e-12)
             if abs(shift) > tolerance_hz:
                 self.warning.emit(
@@ -932,13 +1034,28 @@ class MFLIWorker(QObject):
             data = self.session.poll(recording_time=self._poll_period_s, timeout=0.15)
 
             for name, node in self._stream_nodes.items():
-                scalar = _last_scalar(data.get(node))
+                payload = data.get(node)
+                values = _values_array(payload)
+                scalar = float(values[-1]) if values.size else _last_scalar(payload)
+
                 if scalar is not None:
                     live[name] = scalar
                     if name.startswith("phase_"):
                         self._last_phase_stream = now
                     elif name.startswith("amp_"):
                         self._last_amplitude_stream = now
+
+                if name == "amp_error" and values.size:
+                    # Approximate each sample's host-side time across the poll
+                    # interval. Instrument timestamps are not needed for this
+                    # short display-only RMS window.
+                    n = int(values.size)
+                    dt = self._poll_period_s / max(1, n)
+                    first_t = now - self._poll_period_s + dt
+                    for i, value in enumerate(values):
+                        self._amp_error_history.append(
+                            (first_t + i * dt, float(value))
+                        )
 
             if now - self._last_phase_stream > 0.5:
                 live.update(
@@ -948,10 +1065,29 @@ class MFLIWorker(QObject):
                 )
 
             if now - self._last_amplitude_stream > 0.5:
+                amp_error = float(self.amplitude.error())
                 live.update(
-                    amp_error=float(self.amplitude.error()),
+                    amp_error=amp_error,
                     amp_shift=float(self.amplitude.shift()),
                     amp_value=float(self.amplitude.value()),
+                )
+                if math.isfinite(amp_error):
+                    self._amp_error_history.append((now, amp_error))
+
+            # Amplitude Error is displayed as a moving RMS over a fixed time
+            # window, while the instantaneous error remains available as
+            # ``amp_error`` for reconstructing the measured amplitude.
+            cutoff = now - AMP_ERROR_RMS_WINDOW_S
+            while self._amp_error_history and self._amp_error_history[0][0] < cutoff:
+                self._amp_error_history.popleft()
+
+            if self._amp_error_history:
+                rms_values = np.fromiter(
+                    (value for _t, value in self._amp_error_history),
+                    dtype=float,
+                )
+                live["amp_error_rms"] = float(
+                    np.sqrt(np.mean(np.square(rms_values)))
                 )
 
             if now - self._last_lock_read > 0.5:
@@ -986,6 +1122,7 @@ class MFLIWorker(QObject):
             except Exception:
                 pass
 
+        self._amp_error_history.clear()
         self.phase = None
         self.amplitude = None
         self.signal_output = None
@@ -2326,9 +2463,13 @@ class OscillationControlApp(QObject):
             self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
 
         if "amp_error" in d:
+            # Keep the actual measured amplitude based on the instantaneous
+            # signed MFLI error: Error = Setpoint - Input.
             amp_error = float(d["amp_error"])
-            self.amp_error_label.setValue(amp_error)
             self.amp_measured.setValue(self.amp_setpoint.value() - amp_error)
+        if "amp_error_rms" in d:
+            # The visible Amplitude Error field is a positive moving RMS.
+            self.amp_error_label.setValue(float(d["amp_error_rms"]))
         if "amp_shift" in d:
             self.amp_shift_label.setValue(float(d["amp_shift"]))
         if "amp_value" in d and self.amp_enable.isChecked():

@@ -564,7 +564,7 @@
          <item row="3" column="0">
           <widget class="QLabel" name="ampErrorTitle">
            <property name="text">
-            <string>Ampl. Error (V)</string>
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Ampl. Error (V&lt;span style=&quot; vertical-align:sub;&quot;&gt;rms&lt;/span&gt;)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
           </widget>
          </item>
