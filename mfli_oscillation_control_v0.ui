@@ -539,69 +539,23 @@
          </item>
          <item row="2" column="0" colspan="2">
           <widget class="QWidget" name="ampSetpointSliderWidget" native="true">
-           <layout class="QHBoxLayout" name="ampSetpointSliderLayout">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <property name="spacing">
-             <number>4</number>
-            </property>
+           <layout class="QVBoxLayout" name="ampSetpointSliderLayout">
+            <property name="leftMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <property name="spacing"><number>0</number></property>
             <item>
-             <widget class="QLabel" name="ampSetpointSliderMin">
+             <widget class="NanonisSlider" name="ampSetpointSlider">
               <property name="minimumSize">
-               <size><width>18</width><height>0</height></size>
+               <size><width>0</width><height>43</height></size>
               </property>
-              <property name="text">
-               <string>0</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QSlider" name="ampSetpointSlider">
-              <property name="minimum">
-               <number>0</number>
-              </property>
-              <property name="maximum">
-               <number>100000</number>
-              </property>
-              <property name="value">
-               <number>0</number>
-              </property>
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="tracking">
-               <bool>true</bool>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QSlider::groove:horizontal { height: 4px; background: palette(midlight); border: 1px solid palette(mid); }
-QSlider::handle:horizontal { width: 10px; margin: -5px 0; background: rgb(64, 170, 205); border: 1px solid rgb(90, 90, 90); }</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="ampSetpointSliderMax">
-              <property name="minimumSize">
-               <size><width>48</width><height>0</height></size>
-              </property>
-              <property name="text">
-               <string>1</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignLeft|Qt::AlignVCenter</set>
-              </property>
+              <property name="minimum"><number>0</number></property>
+              <property name="maximum"><number>100000</number></property>
+              <property name="value"><number>0</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+              <property name="tracking"><bool>true</bool></property>
+              <property name="tickPosition"><enum>QSlider::TicksBelow</enum></property>
              </widget>
             </item>
            </layout>
@@ -870,161 +824,120 @@ QSlider::handle:horizontal { width: 10px; margin: -5px 0; background: rgb(64, 17
             <string>PLL</string>
            </property>
            <layout class="QGridLayout" name="pllGrid">
+            <property name="horizontalSpacing"><number>6</number></property>
+            <property name="verticalSpacing"><number>2</number></property>
             <item row="0" column="0" colspan="2">
              <widget class="QCheckBox" name="ampEnable">
-              <property name="text">
-               <string>Ampl. Controller</string>
-              </property>
+              <property name="text"><string>Ampl. Controller</string></property>
              </widget>
             </item>
             <item row="1" column="0">
              <widget class="QLabel" name="ampPLabel">
-              <property name="text">
-               <string>P (V/V)</string>
-              </property>
+              <property name="text"><string>P (V/V)</string></property>
              </widget>
             </item>
             <item row="1" column="1">
              <widget class="NanonisSpinBox" name="ampP">
-              <property name="minimum">
-               <double>-1000000000</double>
-              </property>
-              <property name="maximum">
-               <double>1000000000</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
+              <property name="minimum"><double>-1000000000</double></property>
+              <property name="maximum"><double>1000000000</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
              </widget>
             </item>
-            <item row="2" column="0">
+            <item row="2" column="0" colspan="2">
+             <widget class="NanonisSlider" name="ampPSlider">
+              <property name="minimumHeight"><number>43</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+             </widget>
+            </item>
+            <item row="3" column="0">
              <widget class="QLabel" name="ampILabel">
-              <property name="text">
-               <string>I (1/s)</string>
-              </property>
+              <property name="text"><string>I (1/s)</string></property>
              </widget>
             </item>
-            <item row="2" column="1">
+            <item row="3" column="1">
              <widget class="NanonisSpinBox" name="ampI">
-              <property name="minimum">
-               <double>-1000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>1000000000000</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="0" colspan="2">
-             <widget class="QFrame" name="pllLine">
-              <property name="frameShape">
-               <enum>QFrame::HLine</enum>
-              </property>
-              <property name="frameShadow">
-               <enum>QFrame::Sunken</enum>
-              </property>
+              <property name="minimum"><double>-1000000000000</double></property>
+              <property name="maximum"><double>1000000000000</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
              </widget>
             </item>
             <item row="4" column="0" colspan="2">
+             <widget class="NanonisSlider" name="ampISlider">
+              <property name="minimumHeight"><number>43</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+             </widget>
+            </item>
+            <item row="5" column="0" colspan="2">
+             <widget class="QFrame" name="pllLine">
+              <property name="frameShape"><enum>QFrame::HLine</enum></property>
+              <property name="frameShadow"><enum>QFrame::Sunken</enum></property>
+             </widget>
+            </item>
+            <item row="6" column="0" colspan="2">
              <widget class="QCheckBox" name="phaseEnable">
-              <property name="text">
-               <string>Phase Controller</string>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="0">
-             <widget class="QLabel" name="phasePLabel">
-              <property name="text">
-               <string>P (Hz/deg)</string>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="1">
-             <widget class="NanonisSpinBox" name="phaseP">
-              <property name="minimum">
-               <double>-1000000000</double>
-              </property>
-              <property name="maximum">
-               <double>1000000000</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="0">
-             <widget class="QLabel" name="phaseILabel">
-              <property name="text">
-               <string>I (Hz/(deg·s))</string>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="1">
-             <widget class="NanonisSpinBox" name="phaseI">
-              <property name="minimum">
-               <double>-1000000000000</double>
-              </property>
-              <property name="maximum">
-               <double>1000000000000</double>
-              </property>
-              <property name="decimals">
-               <number>12</number>
-              </property>
-              <property name="keyboardTracking">
-               <bool>false</bool>
-              </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::NoButtons</enum>
-              </property>
+              <property name="text"><string>Phase Controller</string></property>
              </widget>
             </item>
             <item row="7" column="0">
-             <widget class="QLabel" name="phaseLockTitle">
-              <property name="text">
-               <string>Lock</string>
-              </property>
+             <widget class="QLabel" name="phasePLabel">
+              <property name="text"><string>P (Hz/deg)</string></property>
              </widget>
             </item>
             <item row="7" column="1">
-             <widget class="QLabel" name="phaseLockValue">
-              <property name="text">
-               <string>—</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
+             <widget class="NanonisSpinBox" name="phaseP">
+              <property name="minimum"><double>-1000000000</double></property>
+              <property name="maximum"><double>1000000000</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
              </widget>
             </item>
             <item row="8" column="0" colspan="2">
+             <widget class="NanonisSlider" name="phasePSlider">
+              <property name="minimumHeight"><number>43</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+             </widget>
+            </item>
+            <item row="9" column="0">
+             <widget class="QLabel" name="phaseILabel">
+              <property name="text"><string>I (Hz/(deg·s))</string></property>
+             </widget>
+            </item>
+            <item row="9" column="1">
+             <widget class="NanonisSpinBox" name="phaseI">
+              <property name="minimum"><double>-1000000000000</double></property>
+              <property name="maximum"><double>1000000000000</double></property>
+              <property name="decimals"><number>12</number></property>
+              <property name="keyboardTracking"><bool>false</bool></property>
+              <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+             </widget>
+            </item>
+            <item row="10" column="0" colspan="2">
+             <widget class="NanonisSlider" name="phaseISlider">
+              <property name="minimumHeight"><number>43</number></property>
+              <property name="orientation"><enum>Qt::Horizontal</enum></property>
+             </widget>
+            </item>
+            <item row="11" column="0">
+             <widget class="QLabel" name="phaseLockTitle">
+              <property name="text"><string>Lock</string></property>
+             </widget>
+            </item>
+            <item row="11" column="1">
+             <widget class="QLabel" name="phaseLockValue">
+              <property name="text"><string>—</string></property>
+              <property name="alignment"><set>Qt::AlignCenter</set></property>
+             </widget>
+            </item>
+            <item row="12" column="0" colspan="2">
              <spacer name="pllSpacer">
-              <property name="orientation">
-               <enum>Qt::Vertical</enum>
-              </property>
+              <property name="orientation"><enum>Qt::Vertical</enum></property>
               <property name="sizeHint">
-               <size>
-                <width>20</width>
-                <height>180</height>
-               </size>
+               <size><width>20</width><height>20</height></size>
               </property>
              </spacer>
             </item>
@@ -1044,6 +957,11 @@ QSlider::handle:horizontal { width: 10px; margin: -5px 0; background: rgb(64, 17
   <customwidget>
    <class>NanonisSpinBox</class>
    <extends>QDoubleSpinBox</extends>
+   <header>nanonis_spinbox.py</header>
+  </customwidget>
+  <customwidget>
+   <class>NanonisSlider</class>
+   <extends>QSlider</extends>
    <header>nanonis_spinbox.py</header>
   </customwidget>
  </customwidgets>

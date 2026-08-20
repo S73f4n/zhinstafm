@@ -15,24 +15,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
 
-from PySide6.QtCore import QFile, QObject, QThread, QTimer, Signal, Slot, Qt
+from PySide6.QtCore import QEvent, QFile, QObject, QThread, QTimer, Signal, Slot, Qt
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDialog,
+    QDialogButtonBox,
     QLabel,
+    QHBoxLayout,
     QLineEdit,
     QMainWindow,
     QPushButton,
     QProgressBar,
-    QSlider,
     QSpinBox,
     QStatusBar,
+    QVBoxLayout,
     QWidget,
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisSpinBox, format_eng_number
+from nanonis_spinbox import NanonisSlider, NanonisSpinBox, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -998,6 +1001,7 @@ def load_ui(path: Path) -> QMainWindow:
 
     loader = QUiLoader()
     loader.registerCustomWidget(NanonisSpinBox)
+    loader.registerCustomWidget(NanonisSlider)
     try:
         window = loader.load(ui_file)
     finally:
@@ -1339,9 +1343,7 @@ class OscillationControlApp(QObject):
 
         # Signal / setpoint area
         self.amp_setpoint = self.widget(NanonisSpinBox, "ampSetpoint")
-        self.amp_setpoint_slider = self.widget(QSlider, "ampSetpointSlider")
-        self.amp_setpoint_slider_min = self.widget(QLabel, "ampSetpointSliderMin")
-        self.amp_setpoint_slider_max = self.widget(QLabel, "ampSetpointSliderMax")
+        self.amp_setpoint_slider = self.widget(NanonisSlider, "ampSetpointSlider")
         self.amp_measured = self.widget(NanonisSpinBox, "ampMeasuredValue")
         self.amp_error_label = self.widget(NanonisSpinBox, "ampErrorValue")
         self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
@@ -1360,10 +1362,14 @@ class OscillationControlApp(QObject):
         # PLL / PID controllers
         self.amp_enable = self.widget(QCheckBox, "ampEnable")
         self.amp_p = self.widget(NanonisSpinBox, "ampP")
+        self.amp_p_slider = self.widget(NanonisSlider, "ampPSlider")
         self.amp_i = self.widget(NanonisSpinBox, "ampI")
+        self.amp_i_slider = self.widget(NanonisSlider, "ampISlider")
         self.phase_enable = self.widget(QCheckBox, "phaseEnable")
         self.phase_p = self.widget(NanonisSpinBox, "phaseP")
+        self.phase_p_slider = self.widget(NanonisSlider, "phasePSlider")
         self.phase_i = self.widget(NanonisSpinBox, "phaseI")
+        self.phase_i_slider = self.widget(NanonisSlider, "phaseISlider")
         self.phase_lock_label = self.widget(QLabel, "phaseLockValue")
 
         # Amplitude-output values and limits
@@ -1484,14 +1490,80 @@ class OscillationControlApp(QObject):
         self.amp_value_label.setDisplayDecimals(6)
         self._set_amplitude_output_manual_mode(False)
 
-        # Nanonis-style amplitude-setpoint slider. Its physical range is
-        # updated from Signal Input 1's current input range when connected.
+        # Nanonis-style amplitude-setpoint slider. The default physical range
+        # comes from Signal Input 1, but both end markers can be changed by
+        # double-clicking them. Changing the visual range does NOT write to the
+        # MFLI; it only changes the slider mapping.
+        self._amp_setpoint_slider_min_v = 0.0
         self._amp_setpoint_slider_max_v = 1.0
+        self._amp_setpoint_slider_range_user_set = False
         self.amp_setpoint_slider.setRange(0, AMP_SETPOINT_SLIDER_STEPS)
         self.amp_setpoint_slider.setSingleStep(100)
         self.amp_setpoint_slider.setPageStep(1000)
-        self.amp_setpoint_slider_min.setText("0")
-        self._update_amp_setpoint_slider_range(self._amp_setpoint_slider_max_v)
+
+        self.amp_setpoint_slider.setToolTip(
+            "Amplitude setpoint. Double-click only the left/right end scale "
+            "markers to change the displayed slider range (V)."
+        )
+
+        self._set_amp_setpoint_slider_range(0.0, 1.0, user_set=False)
+
+        # P/I sliders for both feedback controllers. These use the same
+        # NanonisSlider control as the amplitude setpoint: ticks and five
+        # engineering labels are shown below the groove, and only the two end
+        # markers are editable by double-clicking. The ranges below are useful
+        # starting windows for the AFM configuration and automatically expand
+        # if a device value lies outside them until the user edits an endpoint.
+        self._gain_sliders = {
+            "amp_p": {
+                "slider": self.amp_p_slider,
+                "spinbox": self.amp_p,
+                "unit": "V/V",
+                "minimum": 0.0,
+                "maximum": 0.1,
+                "user_set": False,
+            },
+            "amp_i": {
+                "slider": self.amp_i_slider,
+                "spinbox": self.amp_i,
+                "unit": "1/s",
+                "minimum": 0.0,
+                "maximum": 100.0,
+                "user_set": False,
+            },
+            "phase_p": {
+                "slider": self.phase_p_slider,
+                "spinbox": self.phase_p,
+                "unit": "Hz/deg",
+                "minimum": -10.0,
+                "maximum": 10.0,
+                "user_set": False,
+            },
+            "phase_i": {
+                "slider": self.phase_i_slider,
+                "spinbox": self.phase_i,
+                "unit": "Hz/(deg·s)",
+                "minimum": -5000.0,
+                "maximum": 5000.0,
+                "user_set": False,
+            },
+        }
+
+        for key, spec in self._gain_sliders.items():
+            slider = spec["slider"]
+            slider.setRange(0, AMP_SETPOINT_SLIDER_STEPS)
+            slider.setSingleStep(100)
+            slider.setPageStep(1000)
+            slider.setToolTip(
+                f"{spec['unit']} controller gain. Double-click only the "
+                "left/right end scale markers to change the slider range."
+            )
+            self._set_gain_slider_range(
+                key,
+                float(spec["minimum"]),
+                float(spec["maximum"]),
+                user_set=False,
+            )
 
     @staticmethod
     def _compact_engineering_text(value: float) -> str:
@@ -1504,25 +1576,57 @@ class OscillationControlApp(QObject):
             number += "0"
         return number + prefix
 
+    def _set_amp_setpoint_slider_range(
+        self,
+        minimum_v: float,
+        maximum_v: float,
+        *,
+        user_set: bool,
+    ) -> None:
+        """Set the slider's physical display range without touching the MFLI."""
+        minimum_v = float(minimum_v)
+        maximum_v = float(maximum_v)
+
+        if not math.isfinite(minimum_v):
+            minimum_v = 0.0
+        if not math.isfinite(maximum_v):
+            maximum_v = 1.0
+
+        # Demodulator R / amplitude is non-negative. Keep a finite, non-zero
+        # range even if an invalid endpoint was entered.
+        minimum_v = max(0.0, minimum_v)
+        span_floor = max(1e-15, abs(minimum_v) * 1e-12)
+        if maximum_v <= minimum_v + span_floor:
+            maximum_v = minimum_v + max(span_floor, 1e-3)
+
+        self._amp_setpoint_slider_min_v = minimum_v
+        self._amp_setpoint_slider_max_v = maximum_v
+        if user_set:
+            self._amp_setpoint_slider_range_user_set = True
+
+        self.amp_setpoint_slider.setScaleRange(minimum_v, maximum_v)
+        self._sync_amp_setpoint_slider(float(self.amp_setpoint.value()))
+
     def _update_amp_setpoint_slider_range(self, maximum_v: float) -> None:
-        """Set the amplitude slider's 0..max physical range in volts."""
+        """Adopt Signal Input 1 range unless the user customized the endpoints."""
+        if self._amp_setpoint_slider_range_user_set:
+            return
+
         maximum_v = float(maximum_v)
         if not math.isfinite(maximum_v) or maximum_v <= 0.0:
             maximum_v = max(abs(float(self.amp_setpoint.value())), 1e-3)
-
-        self._amp_setpoint_slider_max_v = maximum_v
-        self.amp_setpoint_slider_max.setText(
-            self._compact_engineering_text(maximum_v)
-        )
-        self._sync_amp_setpoint_slider(float(self.amp_setpoint.value()))
+        self._set_amp_setpoint_slider_range(0.0, maximum_v, user_set=False)
 
     def _sync_amp_setpoint_slider(self, amplitude_v: float) -> None:
         """Move the slider to match a base-unit amplitude without feedback."""
+        minimum_v = self._amp_setpoint_slider_min_v
         maximum_v = self._amp_setpoint_slider_max_v
-        if maximum_v <= 0.0:
+        span = maximum_v - minimum_v
+        if span <= 0.0:
             return
 
-        fraction = min(1.0, max(0.0, float(amplitude_v) / maximum_v))
+        fraction = (float(amplitude_v) - minimum_v) / span
+        fraction = min(1.0, max(0.0, fraction))
         slider_value = round(fraction * AMP_SETPOINT_SLIDER_STEPS)
         blocked = self.amp_setpoint_slider.blockSignals(True)
         try:
@@ -1535,15 +1639,231 @@ class OscillationControlApp(QObject):
         if self._updating_from_device:
             return
 
-        amplitude_v = (
-            float(slider_value) / AMP_SETPOINT_SLIDER_STEPS
-        ) * self._amp_setpoint_slider_max_v
+        fraction = float(slider_value) / AMP_SETPOINT_SLIDER_STEPS
+        amplitude_v = self._amp_setpoint_slider_min_v + fraction * (
+            self._amp_setpoint_slider_max_v - self._amp_setpoint_slider_min_v
+        )
         self.amp_setpoint.setValue(amplitude_v)
+
+
+    def _edit_amp_setpoint_slider_endpoint(self, *, edit_minimum: bool) -> None:
+        """Open a compact SI-aware editor for one slider end marker."""
+        dialog = QDialog(self.window)
+        dialog.setWindowTitle("Amplitude Setpoint Slider Range")
+        layout = QVBoxLayout(dialog)
+
+        row = QHBoxLayout()
+        label = QLabel("Lower (V)" if edit_minimum else "Upper (V)", dialog)
+        editor = NanonisSpinBox(dialog)
+        editor.setBaseUnit("V")
+        editor.setDisplayDecimals(6)
+        editor.setKeyboardTracking(False)
+        editor.setMinimum(0.0)
+        editor.setMaximum(1e6)
+
+        minimum_v = self._amp_setpoint_slider_min_v
+        maximum_v = self._amp_setpoint_slider_max_v
+        epsilon = max(1e-15, abs(maximum_v - minimum_v) * 1e-9)
+
+        if edit_minimum:
+            editor.setMaximum(max(0.0, maximum_v - epsilon))
+            editor.setValue(minimum_v)
+        else:
+            editor.setMinimum(minimum_v + epsilon)
+            editor.setValue(maximum_v)
+
+        row.addWidget(label)
+        row.addWidget(editor, 1)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel,
+            dialog,
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        editor.setFocus()
+        editor.selectAll()
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        value = float(editor.value())
+        if edit_minimum:
+            self._set_amp_setpoint_slider_range(
+                value, maximum_v, user_set=True
+            )
+        else:
+            self._set_amp_setpoint_slider_range(
+                minimum_v, value, user_set=True
+            )
 
     def _amp_setpoint_changed(self, amplitude_v: float) -> None:
         """Keep spinbox and slider synchronized and write the setpoint."""
         self._sync_amp_setpoint_slider(amplitude_v)
         self._emit_if_user("amp_setpoint_v", amplitude_v)
+
+    @staticmethod
+    def _nice_slider_bound(value: float) -> float:
+        """Round a positive magnitude upward to a 1/2/5 engineering bound."""
+        value = abs(float(value))
+        if not math.isfinite(value) or value <= 0.0:
+            return 1.0
+        exponent = math.floor(math.log10(value))
+        decade = 10.0 ** exponent
+        mantissa = value / decade
+        if mantissa <= 1.0:
+            nice = 1.0
+        elif mantissa <= 2.0:
+            nice = 2.0
+        elif mantissa <= 5.0:
+            nice = 5.0
+        else:
+            nice = 10.0
+        return nice * decade
+
+    def _set_gain_slider_range(
+        self,
+        key: str,
+        minimum: float,
+        maximum: float,
+        *,
+        user_set: bool,
+    ) -> None:
+        """Set one P/I slider's physical scale without writing to the MFLI."""
+        spec = self._gain_sliders[key]
+        minimum = float(minimum)
+        maximum = float(maximum)
+        if not math.isfinite(minimum):
+            minimum = -1.0
+        if not math.isfinite(maximum):
+            maximum = 1.0
+
+        span_floor = max(1e-15, max(abs(minimum), abs(maximum), 1.0) * 1e-12)
+        if maximum <= minimum + span_floor:
+            maximum = minimum + max(span_floor, 1e-6)
+
+        spec["minimum"] = minimum
+        spec["maximum"] = maximum
+        if user_set:
+            spec["user_set"] = True
+
+        spec["slider"].setScaleRange(minimum, maximum)
+        self._sync_gain_slider(key, float(spec["spinbox"].value()))
+
+    def _ensure_gain_slider_contains(self, key: str, value: float) -> None:
+        """Auto-expand a default P/I slider range to include device values."""
+        spec = self._gain_sliders[key]
+        if spec["user_set"]:
+            return
+
+        value = float(value)
+        minimum = float(spec["minimum"])
+        maximum = float(spec["maximum"])
+        if minimum <= value <= maximum:
+            return
+
+        # Preserve a zero-based positive range when possible (typical for the
+        # amplitude controller); otherwise use a symmetric signed range.
+        if minimum >= 0.0 and value >= 0.0:
+            new_max = self._nice_slider_bound(max(maximum, value * 1.2))
+            self._set_gain_slider_range(key, 0.0, new_max, user_set=False)
+            return
+
+        bound = self._nice_slider_bound(
+            max(abs(minimum), abs(maximum), abs(value) * 1.2)
+        )
+        self._set_gain_slider_range(key, -bound, bound, user_set=False)
+
+    def _sync_gain_slider(self, key: str, value: float) -> None:
+        """Move one P/I slider to match its spinbox without feedback."""
+        spec = self._gain_sliders[key]
+        minimum = float(spec["minimum"])
+        maximum = float(spec["maximum"])
+        span = maximum - minimum
+        if span <= 0.0:
+            return
+
+        fraction = (float(value) - minimum) / span
+        fraction = min(1.0, max(0.0, fraction))
+        slider_value = round(fraction * AMP_SETPOINT_SLIDER_STEPS)
+        slider = spec["slider"]
+        blocked = slider.blockSignals(True)
+        try:
+            slider.setValue(slider_value)
+        finally:
+            slider.blockSignals(blocked)
+
+    def _gain_slider_changed(self, key: str, slider_value: int) -> None:
+        """Immediately apply P/I slider motion through the spinbox path."""
+        if self._updating_from_device:
+            return
+        spec = self._gain_sliders[key]
+        fraction = float(slider_value) / AMP_SETPOINT_SLIDER_STEPS
+        value = float(spec["minimum"]) + fraction * (
+            float(spec["maximum"]) - float(spec["minimum"])
+        )
+        spec["spinbox"].setValue(value)
+
+    def _gain_spinbox_changed(self, key: str, value: float) -> None:
+        """Synchronize a P/I slider and write the corresponding controller gain."""
+        self._ensure_gain_slider_contains(key, value)
+        self._sync_gain_slider(key, value)
+        self._emit_if_user(key, value)
+
+    def _edit_gain_slider_endpoint(self, key: str, *, edit_minimum: bool) -> None:
+        """Edit only the left or right P/I slider endpoint."""
+        spec = self._gain_sliders[key]
+        dialog = QDialog(self.window)
+        dialog.setWindowTitle("Controller Slider Range")
+        layout = QVBoxLayout(dialog)
+
+        row = QHBoxLayout()
+        unit = str(spec["unit"])
+        side = "Lower" if edit_minimum else "Upper"
+        label = QLabel(f"{side} ({unit})", dialog)
+        editor = NanonisSpinBox(dialog)
+        editor.setBaseUnit(unit)
+        editor.setDisplayDecimals(6)
+        editor.setKeyboardTracking(False)
+        editor.setMinimum(-1e15)
+        editor.setMaximum(1e15)
+
+        minimum = float(spec["minimum"])
+        maximum = float(spec["maximum"])
+        epsilon = max(1e-15, abs(maximum - minimum) * 1e-9)
+        if edit_minimum:
+            editor.setMaximum(maximum - epsilon)
+            editor.setValue(minimum)
+        else:
+            editor.setMinimum(minimum + epsilon)
+            editor.setValue(maximum)
+
+        row.addWidget(label)
+        row.addWidget(editor, 1)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel,
+            dialog,
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        editor.setFocus()
+        editor.selectAll()
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        value = float(editor.value())
+        if edit_minimum:
+            self._set_gain_slider_range(key, value, maximum, user_set=True)
+        else:
+            self._set_gain_slider_range(key, minimum, value, user_set=True)
 
     def _set_amplitude_output_manual_mode(self, manual: bool) -> None:
         """Switch Output Amplitude between live readback and manual control."""
@@ -1605,10 +1925,28 @@ class OscillationControlApp(QObject):
             lambda v: self._emit_if_user("phase_setpoint_deg", v)
         )
         self.phase_p.valueChanged.connect(
-            lambda v: self._emit_if_user("phase_p", v)
+            lambda v: self._gain_spinbox_changed("phase_p", v)
         )
         self.phase_i.valueChanged.connect(
-            lambda v: self._emit_if_user("phase_i", v)
+            lambda v: self._gain_spinbox_changed("phase_i", v)
+        )
+        self.phase_p_slider.valueChanged.connect(
+            lambda v: self._gain_slider_changed("phase_p", v)
+        )
+        self.phase_i_slider.valueChanged.connect(
+            lambda v: self._gain_slider_changed("phase_i", v)
+        )
+        self.phase_p_slider.minimumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("phase_p", edit_minimum=True)
+        )
+        self.phase_p_slider.maximumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("phase_p", edit_minimum=False)
+        )
+        self.phase_i_slider.minimumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("phase_i", edit_minimum=True)
+        )
+        self.phase_i_slider.maximumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("phase_i", edit_minimum=False)
         )
         self.phase_center.valueChanged.connect(
             lambda v: self._emit_if_user("phase_center_hz", v)
@@ -1627,14 +1965,38 @@ class OscillationControlApp(QObject):
         self.amp_setpoint_slider.valueChanged.connect(
             self._amp_setpoint_slider_changed
         )
+        self.amp_setpoint_slider.minimumDoubleClicked.connect(
+            lambda: self._edit_amp_setpoint_slider_endpoint(edit_minimum=True)
+        )
+        self.amp_setpoint_slider.maximumDoubleClicked.connect(
+            lambda: self._edit_amp_setpoint_slider_endpoint(edit_minimum=False)
+        )
         self.amp_setpoint.valueChanged.connect(
             self._amp_setpoint_changed
         )
         self.amp_p.valueChanged.connect(
-            lambda v: self._emit_if_user("amp_p", v)
+            lambda v: self._gain_spinbox_changed("amp_p", v)
         )
         self.amp_i.valueChanged.connect(
-            lambda v: self._emit_if_user("amp_i", v)
+            lambda v: self._gain_spinbox_changed("amp_i", v)
+        )
+        self.amp_p_slider.valueChanged.connect(
+            lambda v: self._gain_slider_changed("amp_p", v)
+        )
+        self.amp_i_slider.valueChanged.connect(
+            lambda v: self._gain_slider_changed("amp_i", v)
+        )
+        self.amp_p_slider.minimumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("amp_p", edit_minimum=True)
+        )
+        self.amp_p_slider.maximumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("amp_p", edit_minimum=False)
+        )
+        self.amp_i_slider.minimumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("amp_i", edit_minimum=True)
+        )
+        self.amp_i_slider.maximumDoubleClicked.connect(
+            lambda: self._edit_gain_slider_endpoint("amp_i", edit_minimum=False)
         )
         self.amp_center.valueChanged.connect(
             lambda v: self._emit_if_user("amp_center_v", v)
