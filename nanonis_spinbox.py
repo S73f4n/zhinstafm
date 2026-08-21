@@ -400,6 +400,76 @@ class NanonisSwitch(QAbstractButton):
             )
 
 
+class NanonisLockButton(QAbstractButton):
+    """Small checkable lock icon for linked lower/upper range controls.
+
+    checked   -> closed lock / symmetric linked range
+    unchecked -> open lock / independent endpoints
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Link lower and upper limits symmetrically about zero.")
+        self.setFixedSize(26, 34)
+
+    def sizeHint(self) -> QSize:
+        return QSize(26, 34)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(26, 34)
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        color = (
+            self.palette().highlight().color()
+            if self.isChecked()
+            else self.palette().mid().color()
+        )
+        if not self.isEnabled():
+            color.setAlpha(120)
+
+        cx = self.width() / 2.0
+        body = QRectF(cx - 7.0, 16.0, 14.0, 11.0)
+
+        painter.setPen(QPen(color, 1.4))
+        painter.setBrush(color)
+        painter.drawRoundedRect(body, 2.0, 2.0)
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(color, 1.8))
+        if self.isChecked():
+            arc = QRectF(cx - 5.0, 7.0, 10.0, 12.0)
+            painter.drawArc(arc, 0, 180 * 16)
+            painter.drawLine(QPointF(cx - 5.0, 13.0), QPointF(cx - 5.0, 17.0))
+            painter.drawLine(QPointF(cx + 5.0, 13.0), QPointF(cx + 5.0, 17.0))
+        else:
+            arc = QRectF(cx - 1.0, 7.0, 10.0, 12.0)
+            painter.drawArc(arc, 0, 180 * 16)
+            painter.drawLine(QPointF(cx + 9.0, 13.0), QPointF(cx + 9.0, 17.0))
+            painter.drawLine(QPointF(cx - 1.0, 13.0), QPointF(cx - 1.0, 14.5))
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self.palette().base().color())
+        painter.drawEllipse(QRectF(cx - 1.2, 19.0, 2.4, 2.4))
+        painter.drawRect(QRectF(cx - 0.7, 21.0, 1.4, 3.0))
+
+        if self.hasFocus():
+            focus = self.palette().highlight().color()
+            focus.setAlpha(150)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(focus, 1.0, Qt.PenStyle.DotLine))
+            painter.drawRoundedRect(
+                QRectF(1.5, 2.5, self.width() - 3.0, self.height() - 5.0),
+                3.0,
+                3.0,
+            )
+
+
 class NanonisSlider(QSlider):
     """Compact Nanonis-style horizontal slider with an engineering scale.
 

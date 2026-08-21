@@ -410,7 +410,7 @@
               </property>
              </widget>
             </item>
-            <item row="3" column="1" colspan="2">
+            <item row="3" column="1">
              <widget class="NanonisSpinBox" name="phaseLower">
               <property name="minimum">
                <double>-1000000000</double>
@@ -436,7 +436,7 @@
               </property>
              </widget>
             </item>
-            <item row="4" column="1" colspan="2">
+            <item row="4" column="1">
              <widget class="NanonisSpinBox" name="phaseUpper">
               <property name="minimum">
                <double>-1000000000</double>
@@ -453,6 +453,14 @@
               <property name="buttonSymbols">
                <enum>QAbstractSpinBox::NoButtons</enum>
               </property>
+             </widget>
+            </item>
+            <item row="3" column="2" rowspan="2">
+             <widget class="NanonisLockButton" name="phaseRangeLockButton">
+              <property name="toolTip">
+               <string>Link Frequency Shift lower/upper limits symmetrically about 0 Hz.</string>
+              </property>
+              <property name="checkable"><bool>true</bool></property>
              </widget>
             </item>
             <item row="5" column="0" colspan="3">
@@ -807,7 +815,7 @@
             <item row="2" column="2">
              <widget class="QPushButton" name="adviseAmpButton">
               <property name="enabled"><bool>false</bool></property>
-              <property name="text"><string>Amplitude error RMS (V)</string></property>
+              <property name="text"><string>Advise Amp</string></property>
              </widget>
             </item>
             <item row="2" column="3">
@@ -969,6 +977,11 @@
   </customwidget>
   <customwidget>
    <class>NanonisSwitch</class>
+   <extends>QAbstractButton</extends>
+   <header>nanonis_spinbox.py</header>
+  </customwidget>
+  <customwidget>
+   <class>NanonisLockButton</class>
    <extends>QAbstractButton</extends>
    <header>nanonis_spinbox.py</header>
   </customwidget>

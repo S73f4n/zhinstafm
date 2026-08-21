@@ -50,7 +50,7 @@
            </widget>
           </item>
           <item row="2" column="0"><widget class="QLabel" name="lowerLabel"><property name="text"><string>Lower (Hz)</string></property></widget></item>
-          <item row="2" column="1" colspan="2">
+          <item row="2" column="1">
            <widget class="NanonisSpinBox" name="lowerOffset">
             <property name="minimum"><double>-1000000000</double></property>
             <property name="maximum"><double>1000000000</double></property>
@@ -61,7 +61,7 @@
            </widget>
           </item>
           <item row="3" column="0"><widget class="QLabel" name="upperLabel"><property name="text"><string>Upper (Hz)</string></property></widget></item>
-          <item row="3" column="1" colspan="2">
+          <item row="3" column="1">
            <widget class="NanonisSpinBox" name="upperOffset">
             <property name="minimum"><double>-1000000000</double></property>
             <property name="maximum"><double>1000000000</double></property>
@@ -69,6 +69,12 @@
             <property name="decimals"><number>12</number></property>
             <property name="keyboardTracking"><bool>false</bool></property>
             <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+           </widget>
+          </item>
+          <item row="2" column="2" rowspan="2">
+           <widget class="NanonisLockButton" name="rangeLockButton">
+            <property name="toolTip"><string>Link Lower/Upper sweep offsets symmetrically about 0 Hz.</string></property>
+            <property name="checkable"><bool>true</bool></property>
            </widget>
           </item>
           <item row="4" column="0"><widget class="QLabel" name="pointsLabel"><property name="text"><string>Points</string></property></widget></item>
@@ -149,6 +155,7 @@
  </widget>
  <customwidgets>
   <customwidget><class>NanonisSpinBox</class><extends>QDoubleSpinBox</extends><header>nanonis_spinbox.py</header></customwidget>
+  <customwidget><class>NanonisLockButton</class><extends>QAbstractButton</extends><header>nanonis_spinbox.py</header></customwidget>
  </customwidgets>
  <resources/>
  <connections/>

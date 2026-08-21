@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
+from nanonis_spinbox import NanonisLockButton, NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -1135,6 +1135,7 @@ def load_ui(path: Path) -> QMainWindow:
     loader.registerCustomWidget(NanonisSpinBox)
     loader.registerCustomWidget(NanonisSlider)
     loader.registerCustomWidget(NanonisSwitch)
+    loader.registerCustomWidget(NanonisLockButton)
     try:
         window = loader.load(ui_file)
     finally:
@@ -1159,6 +1160,7 @@ class FrequencySweepWindow(QObject):
         self.window = load_ui(ui_path)
         self._last_fit: dict[str, Any] | None = None
         self._range_initialized = False
+        self._range_linking = False
         self._bind_widgets()
         self._configure_widgets()
         self._build_plots()
@@ -1178,6 +1180,7 @@ class FrequencySweepWindow(QObject):
         self.center_value = self.widget(NanonisSpinBox, "centerValue")
         self.lower_offset = self.widget(NanonisSpinBox, "lowerOffset")
         self.upper_offset = self.widget(NanonisSpinBox, "upperOffset")
+        self.range_lock = self.widget(NanonisLockButton, "rangeLockButton")
         self.points = self.widget(QSpinBox, "pointsSpinBox")
         self.period = self.widget(NanonisSpinBox, "periodSpinBox")
         self.initial_settling = self.widget(NanonisSpinBox, "initialSettlingSpinBox")
@@ -1259,6 +1262,37 @@ class FrequencySweepWindow(QObject):
         self.start_button.clicked.connect(self._start)
         self.stop_button.clicked.connect(self.stop_requested.emit)
         self.apply_button.clicked.connect(self._apply_fit)
+        self.lower_offset.valueChanged.connect(self._lower_offset_changed)
+        self.upper_offset.valueChanged.connect(self._upper_offset_changed)
+        self.range_lock.toggled.connect(self._range_lock_toggled)
+
+    def _set_symmetric_range(self, magnitude_hz: float) -> None:
+        magnitude = abs(float(magnitude_hz))
+        self._range_linking = True
+        try:
+            self.lower_offset.setValue(-magnitude)
+            self.upper_offset.setValue(+magnitude)
+        finally:
+            self._range_linking = False
+
+    def _lower_offset_changed(self, value: float) -> None:
+        if self._range_linking or not self.range_lock.isChecked():
+            return
+        self._set_symmetric_range(abs(float(value)))
+
+    def _upper_offset_changed(self, value: float) -> None:
+        if self._range_linking or not self.range_lock.isChecked():
+            return
+        self._set_symmetric_range(abs(float(value)))
+
+    def _range_lock_toggled(self, checked: bool) -> None:
+        if not checked or self._range_linking:
+            return
+        magnitude = max(
+            abs(float(self.lower_offset.value())),
+            abs(float(self.upper_offset.value())),
+        )
+        self._set_symmetric_range(magnitude)
 
     def prepare(
         self,
@@ -1271,9 +1305,16 @@ class FrequencySweepWindow(QObject):
         self.center_value.setValue(float(center_hz))
         self.current_shift.setValue(float(current_shift_hz))
         if not self._range_initialized:
-            if default_lower_hz < default_upper_hz:
-                self.lower_offset.setValue(float(default_lower_hz))
-                self.upper_offset.setValue(float(default_upper_hz))
+            self._range_linking = True
+            try:
+                if default_lower_hz < default_upper_hz:
+                    self.lower_offset.setValue(float(default_lower_hz))
+                    self.upper_offset.setValue(float(default_upper_hz))
+                scale = max(abs(float(default_lower_hz)), abs(float(default_upper_hz)), 1.0)
+                symmetric = abs(float(default_lower_hz) + float(default_upper_hz)) <= 1e-9 * scale
+                self.range_lock.setChecked(bool(symmetric))
+            finally:
+                self._range_linking = False
             self._range_initialized = True
         self.start_button.setEnabled(bool(connected))
         if connected:
@@ -1439,6 +1480,8 @@ class OscillationControlApp(QObject):
         self.config_path = ui_path.with_name(CONNECTION_CONFIG_FILENAME)
         self._updating_from_device = False
         self._shutting_down = False
+        self._phase_range_linking = False
+        self._phase_range_lock_initialized = False
         self.sweep_window: FrequencySweepWindow | None = None
 
         self._bind_widgets()
@@ -1471,6 +1514,7 @@ class OscillationControlApp(QObject):
         self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
         self.phase_lower = self.widget(NanonisSpinBox, "phaseLower")
         self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
+        self.phase_range_lock = self.widget(NanonisLockButton, "phaseRangeLockButton")
         self.phase_shift_label = self.widget(NanonisSpinBox, "phaseShiftValue")
         self.phase_value_label = self.widget(NanonisSpinBox, "phaseValueValue")
 
@@ -2016,12 +2060,9 @@ class OscillationControlApp(QObject):
         self.phase_center.valueChanged.connect(
             lambda v: self._emit_if_user("phase_center_hz", v)
         )
-        self.phase_lower.valueChanged.connect(
-            lambda v: self._emit_if_user("phase_lower_hz", v)
-        )
-        self.phase_upper.valueChanged.connect(
-            lambda v: self._emit_if_user("phase_upper_hz", v)
-        )
+        self.phase_lower.valueChanged.connect(self._phase_lower_changed)
+        self.phase_upper.valueChanged.connect(self._phase_upper_changed)
+        self.phase_range_lock.toggled.connect(self._phase_range_lock_toggled)
 
         self.amp_enable.toggled.connect(self._on_amp_enable_toggled)
         self.amp_value_label.valueChanged.connect(
@@ -2072,6 +2113,52 @@ class OscillationControlApp(QObject):
         self.amp_upper.valueChanged.connect(
             lambda v: self._emit_if_user("amp_upper_v", v)
         )
+
+    def _set_phase_range_symmetrically(
+        self,
+        magnitude_hz: float,
+        *,
+        write_device: bool,
+    ) -> None:
+        magnitude = abs(float(magnitude_hz))
+        lower = -magnitude
+        upper = +magnitude
+
+        self._phase_range_linking = True
+        try:
+            self.phase_lower.setValue(lower)
+            self.phase_upper.setValue(upper)
+        finally:
+            self._phase_range_linking = False
+
+        if write_device and not self._updating_from_device:
+            self._emit_if_user("phase_lower_hz", lower)
+            self._emit_if_user("phase_upper_hz", upper)
+
+    def _phase_lower_changed(self, value: float) -> None:
+        if self._updating_from_device or self._phase_range_linking:
+            return
+        if self.phase_range_lock.isChecked():
+            self._set_phase_range_symmetrically(abs(float(value)), write_device=True)
+        else:
+            self._emit_if_user("phase_lower_hz", float(value))
+
+    def _phase_upper_changed(self, value: float) -> None:
+        if self._updating_from_device or self._phase_range_linking:
+            return
+        if self.phase_range_lock.isChecked():
+            self._set_phase_range_symmetrically(abs(float(value)), write_device=True)
+        else:
+            self._emit_if_user("phase_upper_hz", float(value))
+
+    def _phase_range_lock_toggled(self, checked: bool) -> None:
+        if self._updating_from_device or self._phase_range_linking or not checked:
+            return
+        magnitude = max(
+            abs(float(self.phase_lower.value())),
+            abs(float(self.phase_upper.value())),
+        )
+        self._set_phase_range_symmetrically(magnitude, write_device=True)
 
     def _ensure_frequency_sweep_window(self) -> FrequencySweepWindow:
         if self.sweep_window is None:
@@ -2350,6 +2437,13 @@ class OscillationControlApp(QObject):
                 self.sweep_window.update_center(float(s["phase_center_hz"]))
             self.phase_lower.setValue(float(s["phase_lower_hz"]))
             self.phase_upper.setValue(float(s["phase_upper_hz"]))
+            if not self._phase_range_lock_initialized:
+                lower_hz = float(s["phase_lower_hz"])
+                upper_hz = float(s["phase_upper_hz"])
+                scale = max(abs(lower_hz), abs(upper_hz), 1.0)
+                symmetric = abs(lower_hz + upper_hz) <= 1e-9 * scale
+                self.phase_range_lock.setChecked(bool(symmetric))
+                self._phase_range_lock_initialized = True
 
             amp_enabled = bool(s["amp_enable"])
             self.amp_enable.setChecked(amp_enabled)
