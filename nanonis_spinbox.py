@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 import re
 
-from PySide6.QtCore import Property, QPointF, QRectF, QSize, QTimer, Qt, Signal, QVariantAnimation
+from PySide6.QtCore import QEvent, Property, QPointF, QRectF, QSize, QTimer, Qt, Signal, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF, QValidator
-from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QDoubleSpinBox, QSlider, QStyle, QWidget
+from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QDoubleSpinBox, QLineEdit, QSlider, QStyle, QWidget
 
 
 _PREFIX_TO_EXPONENT = {
@@ -102,6 +102,31 @@ def format_eng_number(
 
     sign = "+" if show_plus else ""
     return f"{scaled:{sign}.{decimals}f}{prefix}"
+
+
+def parse_eng_number(text: str) -> float | None:
+    """Parse a number with an optional SI prefix, returning base-unit value."""
+    text = str(text).replace("\N{MINUS SIGN}", "-")
+    match = _NUMBER_PREFIX_RE.match(text)
+    if match is None:
+        return None
+
+    number_text = match.group(1).replace(",", ".")
+    prefix = match.group(2)
+
+    try:
+        number = float(number_text)
+    except ValueError:
+        return None
+
+    exponent = _PREFIX_TO_EXPONENT.get(prefix)
+    if exponent is None:
+        return None
+
+    value = number * (10.0**exponent)
+    if not math.isfinite(value):
+        return None
+    return value
 
 
 class NanonisSpinBox(QDoubleSpinBox):
@@ -268,28 +293,7 @@ class NanonisSpinBox(QDoubleSpinBox):
         )
 
     def _parse_text(self, text: str) -> float | None:
-        text = text.replace("\N{MINUS SIGN}", "-")
-        match = _NUMBER_PREFIX_RE.match(text)
-        if match is None:
-            return None
-
-        number_text = match.group(1).replace(",", ".")
-        prefix = match.group(2)
-
-        try:
-            number = float(number_text)
-        except ValueError:
-            return None
-
-        exponent = _PREFIX_TO_EXPONENT.get(prefix)
-        if exponent is None:
-            return None
-
-        value = number * (10.0**exponent)
-        if not math.isfinite(value):
-            return None
-
-        return value
+        return parse_eng_number(text)
 
 
 
@@ -408,8 +412,13 @@ class NanonisSlider(QSlider):
     labels are paint-only, so they cannot be edited accidentally.
     """
 
+    # Legacy double-click signals are retained for compatibility, but the
+    # current widget edits endpoint labels inline instead of opening dialogs.
     minimumDoubleClicked = Signal()
     maximumDoubleClicked = Signal()
+
+    minimumEditCommitted = Signal(float)
+    maximumEditCommitted = Signal(float)
 
     _TICK_COUNT = 20
     _MAJOR_EVERY = 5
@@ -423,6 +432,9 @@ class NanonisSlider(QSlider):
         self.setTracking(True)
         self.setMouseTracking(True)
         self._dragging_handle = False
+
+        self._endpoint_editor: QLineEdit | None = None
+        self._editing_endpoint = 0  # -1 = minimum, +1 = maximum
 
     def setScaleRange(self, minimum: float, maximum: float) -> None:
         """Set values represented by the left/right scale labels."""
@@ -459,19 +471,123 @@ class NanonisSlider(QSlider):
         label_top = tick_top + 7.0
         return left, right, groove_y, tick_top, label_top
 
+    def _endpoint_label_rect(self, endpoint: int) -> QRectF:
+        """Return the exact painted rectangle for one editable end label."""
+        left, right, _groove_y, _tick_top, label_top = self._geometry()
+        label_height = 14.0
+        if endpoint < 0:
+            return QRectF(left, label_top, 62.0, label_height)
+        return QRectF(right - 62.0, label_top, 62.0, label_height)
+
     def _endpoint_hit(self, x: float, y: float) -> int:
-        """Return -1 for left endpoint, +1 for right endpoint, else 0."""
-        left, right, groove_y, _tick_top, label_top = self._geometry()
-        # Restrict edit affordance to the endpoint marker/label region. This
-        # deliberately excludes the groove and all intermediate labels.
-        if y < groove_y + 7.0:
-            return 0
-        hit_width = 42.0
-        if x <= left + hit_width:
+        """Return -1/+1 only when the corresponding endpoint LABEL is hit."""
+        point = QPointF(float(x), float(y))
+        if self._endpoint_label_rect(-1).contains(point):
             return -1
-        if x >= right - hit_width:
+        if self._endpoint_label_rect(+1).contains(point):
             return +1
         return 0
+
+    def _begin_endpoint_edit(self, endpoint: int) -> None:
+        """Replace one painted endpoint label with an inline text editor."""
+        self._cancel_endpoint_edit()
+
+        endpoint = -1 if endpoint < 0 else +1
+        value = self._scale_minimum if endpoint < 0 else self._scale_maximum
+        rect = self._endpoint_label_rect(endpoint)
+
+        editor = QLineEdit(self)
+        editor.setText(self._compact_scale_text(value))
+        editor.setFrame(True)
+        editor.setAlignment(
+            (Qt.AlignmentFlag.AlignLeft if endpoint < 0 else Qt.AlignmentFlag.AlignRight)
+            | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        font = self.font()
+        font.setPointSizeF(max(6.5, font.pointSizeF() - 1.0))
+        editor.setFont(font)
+
+        # Slightly taller than the painted label, but at the same location, so
+        # the label visually turns into an editor rather than spawning a dialog.
+        edit_rect = rect.adjusted(-2.0, -3.0, 2.0, 4.0)
+        editor.setGeometry(
+            int(round(edit_rect.x())),
+            int(round(edit_rect.y())),
+            int(round(edit_rect.width())),
+            int(round(edit_rect.height())),
+        )
+        editor.setStyleSheet(
+            "QLineEdit {"
+            " background: palette(base);"
+            " color: palette(text);"
+            " border: 1px solid palette(highlight);"
+            " padding: 0px 2px;"
+            "}"
+        )
+        editor.returnPressed.connect(self._commit_endpoint_edit)
+        editor.editingFinished.connect(self._cancel_endpoint_edit)
+        editor.installEventFilter(self)
+
+        self._endpoint_editor = editor
+        self._editing_endpoint = endpoint
+
+        editor.show()
+        editor.setFocus(Qt.FocusReason.MouseFocusReason)
+        editor.selectAll()
+        self.update()
+
+    def _commit_endpoint_edit(self) -> None:
+        editor = self._endpoint_editor
+        endpoint = self._editing_endpoint
+        if editor is None or endpoint == 0:
+            return
+
+        value = parse_eng_number(editor.text())
+        if value is None:
+            # Keep the editor active and make the invalid entry obvious.
+            editor.setStyleSheet(
+                "QLineEdit {"
+                " background: palette(base);"
+                " color: palette(text);"
+                " border: 1px solid rgb(190, 70, 70);"
+                " padding: 0px 2px;"
+                "}"
+            )
+            editor.setFocus()
+            editor.selectAll()
+            return
+
+        self._endpoint_editor = None
+        self._editing_endpoint = 0
+        editor.removeEventFilter(self)
+        editor.hide()
+        editor.deleteLater()
+        self.update()
+
+        if endpoint < 0:
+            self.minimumEditCommitted.emit(float(value))
+        else:
+            self.maximumEditCommitted.emit(float(value))
+
+    def _cancel_endpoint_edit(self) -> None:
+        editor = self._endpoint_editor
+        if editor is None:
+            return
+        self._endpoint_editor = None
+        self._editing_endpoint = 0
+        editor.removeEventFilter(self)
+        editor.hide()
+        editor.deleteLater()
+        self.update()
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self._endpoint_editor:
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() == Qt.Key.Key_Escape:
+                    self._cancel_endpoint_edit()
+                    return True
+        return super().eventFilter(watched, event)
 
     def _slider_x(self) -> float:
         """Return the painted handle x coordinate."""
@@ -545,12 +661,8 @@ class NanonisSlider(QSlider):
 
     def mouseDoubleClickEvent(self, event) -> None:
         hit = self._endpoint_hit(event.position().x(), event.position().y())
-        if hit < 0:
-            self.minimumDoubleClicked.emit()
-            event.accept()
-            return
-        if hit > 0:
-            self.maximumDoubleClicked.emit()
+        if hit:
+            self._begin_endpoint_edit(hit)
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
@@ -635,7 +747,9 @@ class NanonisSlider(QSlider):
                 rect = QRectF(x - 35.0, label_top, 70.0, label_height)
                 alignment = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
 
-            painter.drawText(rect, alignment, label)
+            endpoint = -1 if index == 0 else (+1 if index == self._TICK_COUNT else 0)
+            if endpoint == 0 or endpoint != self._editing_endpoint:
+                painter.drawText(rect, alignment, label)
 
         # Map the slider position onto our custom groove.
         x = self._slider_x()
