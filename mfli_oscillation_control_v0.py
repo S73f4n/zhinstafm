@@ -1517,6 +1517,7 @@ class OscillationControlApp(QObject):
         self.phase_upper = self.widget(NanonisSpinBox, "phaseUpper")
         self.phase_range_lock = self.widget(NanonisLockButton, "phaseRangeLockButton")
         self.phase_shift_label = self.widget(NanonisSpinBox, "phaseShiftValue")
+        self.phase_shift_slider = self.widget(NanonisSlider, "phaseShiftSlider")
         self.phase_value_label = self.widget(NanonisSpinBox, "phaseValueValue")
 
         # Signal / setpoint area
@@ -1686,6 +1687,18 @@ class OscillationControlApp(QObject):
 
         self._set_amp_setpoint_slider_range(0.0, 1.0, user_set=False)
 
+        # Live Frequency Shift indicator. It uses the same Nanonis slider
+        # appearance, but is intentionally non-interactive: its scale follows
+        # the PLL1 lower/upper shift limits and its handle follows PID1 Shift.
+        self.phase_shift_slider.setRange(0, AMP_SETPOINT_SLIDER_STEPS)
+        self.phase_shift_slider.setEnabled(False)
+        self.phase_shift_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.phase_shift_slider.setToolTip(
+            "Live PLL1 frequency shift. Display only; range follows Shift Lower/Upper."
+        )
+        self._sync_phase_shift_slider_scale()
+        self._sync_phase_shift_slider(float(self.phase_shift_label.value()))
+
         # P/I sliders for both feedback controllers. These use the same
         # NanonisSlider control as the amplitude setpoint: ticks and five
         # engineering labels are shown below the groove, and only the two end
@@ -1753,6 +1766,42 @@ class OscillationControlApp(QObject):
         if number in {"", "+", "-"}:
             number += "0"
         return number + prefix
+
+    def _sync_phase_shift_slider_scale(self) -> None:
+        """Make the read-only shift slider use the current PLL1 shift limits."""
+        minimum_hz = float(self.phase_lower.value())
+        maximum_hz = float(self.phase_upper.value())
+
+        if not math.isfinite(minimum_hz):
+            minimum_hz = -1.0
+        if not math.isfinite(maximum_hz):
+            maximum_hz = +1.0
+
+        if maximum_hz <= minimum_hz:
+            magnitude = max(abs(minimum_hz), abs(maximum_hz), 1.0)
+            minimum_hz = -magnitude
+            maximum_hz = +magnitude
+
+        self.phase_shift_slider.setScaleRange(minimum_hz, maximum_hz)
+        self._sync_phase_shift_slider(float(self.phase_shift_label.value()))
+
+    def _sync_phase_shift_slider(self, shift_hz: float) -> None:
+        """Move the display-only slider handle to the current PLL1 shift."""
+        minimum_hz = float(self.phase_lower.value())
+        maximum_hz = float(self.phase_upper.value())
+        span = maximum_hz - minimum_hz
+        if not math.isfinite(span) or span <= 0.0:
+            return
+
+        fraction = (float(shift_hz) - minimum_hz) / span
+        fraction = min(1.0, max(0.0, fraction))
+        slider_value = round(fraction * AMP_SETPOINT_SLIDER_STEPS)
+
+        blocked = self.phase_shift_slider.blockSignals(True)
+        try:
+            self.phase_shift_slider.setValue(slider_value)
+        finally:
+            self.phase_shift_slider.blockSignals(blocked)
 
     def _set_amp_setpoint_slider_range(
         self,
@@ -2132,11 +2181,14 @@ class OscillationControlApp(QObject):
         finally:
             self._phase_range_linking = False
 
+        self._sync_phase_shift_slider_scale()
+
         if write_device and not self._updating_from_device:
             self._emit_if_user("phase_lower_hz", lower)
             self._emit_if_user("phase_upper_hz", upper)
 
     def _phase_lower_changed(self, value: float) -> None:
+        self._sync_phase_shift_slider_scale()
         if self._updating_from_device or self._phase_range_linking:
             return
         if self.phase_range_lock.isChecked():
@@ -2145,6 +2197,7 @@ class OscillationControlApp(QObject):
             self._emit_if_user("phase_lower_hz", float(value))
 
     def _phase_upper_changed(self, value: float) -> None:
+        self._sync_phase_shift_slider_scale()
         if self._updating_from_device or self._phase_range_linking:
             return
         if self.phase_range_lock.isChecked():
@@ -2438,6 +2491,7 @@ class OscillationControlApp(QObject):
                 self.sweep_window.update_center(float(s["phase_center_hz"]))
             self.phase_lower.setValue(float(s["phase_lower_hz"]))
             self.phase_upper.setValue(float(s["phase_upper_hz"]))
+            self._sync_phase_shift_slider_scale()
             if not self._phase_range_lock_initialized:
                 lower_hz = float(s["phase_lower_hz"])
                 upper_hz = float(s["phase_upper_hz"])
@@ -2478,6 +2532,7 @@ class OscillationControlApp(QObject):
         if "phase_shift" in d:
             phase_shift = float(d["phase_shift"])
             self.phase_shift_label.setValue(phase_shift)
+            self._sync_phase_shift_slider(phase_shift)
             if self.sweep_window is not None:
                 self.sweep_window.update_current_shift(phase_shift)
         if "phase_value" in d:
