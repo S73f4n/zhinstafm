@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 import re
 
-from PySide6.QtCore import Property, QPointF, QRectF, QTimer, Qt, Signal
+from PySide6.QtCore import Property, QPointF, QRectF, QSize, QTimer, Qt, Signal, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF, QValidator
-from PySide6.QtWidgets import QAbstractSpinBox, QDoubleSpinBox, QSlider, QStyle, QWidget
+from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
 
 _PREFIX_TO_EXPONENT = {
@@ -291,6 +291,109 @@ class NanonisSpinBox(QDoubleSpinBox):
 
         return value
 
+
+
+class NanonisSwitch(QAbstractButton):
+    """Compact GTK/Nanonis-like toggle implemented entirely with Qt.
+
+    It is a normal checkable QAbstractButton, so callers can use the standard
+    Qt API and signals:
+        setChecked(bool)
+        isChecked()
+        toggled(bool)
+
+    The switch is custom-painted; no third-party widget library is required.
+    """
+
+    _TRACK_W = 42.0
+    _TRACK_H = 20.0
+    _THUMB_D = 16.0
+    _GAP = 7.0
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(22)
+
+        self._thumb_position = 1.0 if self.isChecked() else 0.0
+        self._animation = QVariantAnimation(self)
+        self._animation.setDuration(110)
+        self._animation.valueChanged.connect(self._on_animation_value)
+        self.toggled.connect(self._animate_to_state)
+
+    def sizeHint(self) -> QSize:
+        fm = self.fontMetrics()
+        caption_w = fm.horizontalAdvance(self.text()) if self.text() else 0
+        width = int(self._TRACK_W + (self._GAP + caption_w if caption_w else 0) + 4)
+        height = max(22, fm.height() + 4)
+        return QSize(width, height)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def _on_animation_value(self, value) -> None:
+        self._thumb_position = float(value)
+        self.update()
+
+    def _animate_to_state(self, checked: bool) -> None:
+        self._animation.stop()
+        self._animation.setStartValue(float(self._thumb_position))
+        self._animation.setEndValue(1.0 if checked else 0.0)
+        self._animation.start()
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        track_y = (self.height() - self._TRACK_H) / 2.0
+        track = QRectF(1.0, track_y, self._TRACK_W, self._TRACK_H)
+
+        enabled = self.isEnabled()
+        if self.isChecked():
+            fill = QColor(79, 190, 84) if enabled else QColor(165, 205, 167)
+            border = QColor(61, 157, 67)
+        else:
+            fill = QColor(190, 190, 190) if enabled else QColor(215, 215, 215)
+            border = QColor(150, 150, 150)
+
+        painter.setPen(QPen(border, 1.0))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(track, self._TRACK_H / 2.0, self._TRACK_H / 2.0)
+
+        travel = self._TRACK_W - self._THUMB_D - 4.0
+        thumb_x = track.left() + 2.0 + travel * self._thumb_position
+        thumb_y = track.top() + 2.0
+        thumb = QRectF(thumb_x, thumb_y, self._THUMB_D, self._THUMB_D)
+
+        painter.setPen(QPen(QColor(130, 130, 130), 0.8))
+        painter.setBrush(QColor(250, 250, 250) if enabled else QColor(238, 238, 238))
+        painter.drawEllipse(thumb)
+
+        # Subtle focus indication without changing switch geometry.
+        if self.hasFocus():
+            focus = track.adjusted(-2.0, -2.0, 2.0, 2.0)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(70, 135, 210), 1.0))
+            painter.drawRoundedRect(focus, self._TRACK_H / 2.0 + 2.0, self._TRACK_H / 2.0 + 2.0)
+
+        if self.text():
+            text_rect = QRectF(
+                track.right() + self._GAP,
+                0.0,
+                max(0.0, self.width() - track.right() - self._GAP),
+                float(self.height()),
+            )
+            text_color = self.palette().text().color()
+            if not enabled:
+                text_color = self.palette().mid().color()
+            painter.setPen(text_color)
+            painter.drawText(
+                text_rect,
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                self.text(),
+            )
 
 
 class NanonisSlider(QSlider):

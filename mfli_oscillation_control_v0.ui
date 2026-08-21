@@ -117,9 +117,10 @@
            </property>
            <layout class="QGridLayout" name="outputGrid">
             <item row="0" column="0" colspan="2">
-             <widget class="QCheckBox" name="signalOutputEnable">
+             <widget class="NanonisSwitch" name="signalOutputEnable">
+              <property name="minimumHeight"><number>24</number></property>
               <property name="text">
-               <string>Signal Output 1 Enable</string>
+               <string>Signal Output 1</string>
               </property>
              </widget>
             </item>
@@ -806,7 +807,7 @@
             <item row="2" column="2">
              <widget class="QPushButton" name="adviseAmpButton">
               <property name="enabled"><bool>false</bool></property>
-              <property name="text"><string>Advise Amp</string></property>
+              <property name="text"><string>Amplitude error RMS (V)</string></property>
              </widget>
             </item>
             <item row="2" column="3">
@@ -827,7 +828,8 @@
             <property name="horizontalSpacing"><number>6</number></property>
             <property name="verticalSpacing"><number>2</number></property>
             <item row="0" column="0" colspan="2">
-             <widget class="QCheckBox" name="ampEnable">
+             <widget class="NanonisSwitch" name="ampEnable">
+              <property name="minimumHeight"><number>24</number></property>
               <property name="text"><string>Ampl. Controller</string></property>
              </widget>
             </item>
@@ -878,7 +880,8 @@
              </widget>
             </item>
             <item row="6" column="0" colspan="2">
-             <widget class="QCheckBox" name="phaseEnable">
+             <widget class="NanonisSwitch" name="phaseEnable">
+              <property name="minimumHeight"><number>24</number></property>
               <property name="text"><string>Phase Controller</string></property>
              </widget>
             </item>
@@ -962,6 +965,11 @@
   <customwidget>
    <class>NanonisSlider</class>
    <extends>QSlider</extends>
+   <header>nanonis_spinbox.py</header>
+  </customwidget>
+  <customwidget>
+   <class>NanonisSwitch</class>
+   <extends>QAbstractButton</extends>
    <header>nanonis_spinbox.py</header>
   </customwidget>
  </customwidgets>

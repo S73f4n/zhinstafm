@@ -20,7 +20,6 @@ from PySide6.QtCore import QEvent, QFile, QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QLabel,
@@ -36,7 +35,7 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisSlider, NanonisSpinBox, format_eng_number
+from nanonis_spinbox import NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -1139,6 +1138,7 @@ def load_ui(path: Path) -> QMainWindow:
     loader = QUiLoader()
     loader.registerCustomWidget(NanonisSpinBox)
     loader.registerCustomWidget(NanonisSlider)
+    loader.registerCustomWidget(NanonisSwitch)
     try:
         window = loader.load(ui_file)
     finally:
@@ -1469,7 +1469,7 @@ class OscillationControlApp(QObject):
         self.statusbar = self.widget(QStatusBar, "statusbar")
 
         # Output / frequency-generator controls
-        self.signal_output_enable = self.widget(QCheckBox, "signalOutputEnable")
+        self.signal_output_enable = self.widget(NanonisSwitch, "signalOutputEnable")
         self.center_button = self.widget(QPushButton, "centerButton")
         self.sweep_button = self.widget(QPushButton, "sweepButton")
         self.phase_center = self.widget(NanonisSpinBox, "phaseCenter")
@@ -1497,12 +1497,12 @@ class OscillationControlApp(QObject):
         self.advise_button = self.widget(QPushButton, "adviseButton")
 
         # PLL / PID controllers
-        self.amp_enable = self.widget(QCheckBox, "ampEnable")
+        self.amp_enable = self.widget(NanonisSwitch, "ampEnable")
         self.amp_p = self.widget(NanonisSpinBox, "ampP")
         self.amp_p_slider = self.widget(NanonisSlider, "ampPSlider")
         self.amp_i = self.widget(NanonisSpinBox, "ampI")
         self.amp_i_slider = self.widget(NanonisSlider, "ampISlider")
-        self.phase_enable = self.widget(QCheckBox, "phaseEnable")
+        self.phase_enable = self.widget(NanonisSwitch, "phaseEnable")
         self.phase_p = self.widget(NanonisSpinBox, "phaseP")
         self.phase_p_slider = self.widget(NanonisSlider, "phasePSlider")
         self.phase_i = self.widget(NanonisSpinBox, "phaseI")

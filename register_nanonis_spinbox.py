@@ -10,7 +10,7 @@ bash:
 """
 
 from PySide6.QtDesigner import QPyDesignerCustomWidgetCollection
-from nanonis_spinbox import NanonisSpinBox
+from nanonis_spinbox import NanonisSlider, NanonisSpinBox, NanonisSwitch
 
 
 DOM_XML = """
@@ -43,4 +43,46 @@ QPyDesignerCustomWidgetCollection.registerCustomWidget(
     tool_tip="Nanonis-style engineering field: number + SI prefix only",
     group="MFLI Controls",
     xml=DOM_XML,
+)
+
+
+SLIDER_DOM_XML = """
+<ui language="c++">
+    <widget class="NanonisSlider" name="nanonisSlider">
+        <property name="geometry">
+            <rect><x>0</x><y>0</y><width>180</width><height>30</height></rect>
+        </property>
+        <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        <property name="tickPosition"><enum>QSlider::TicksBelow</enum></property>
+    </widget>
+</ui>
+"""
+
+QPyDesignerCustomWidgetCollection.registerCustomWidget(
+    NanonisSlider,
+    module="nanonis_spinbox",
+    tool_tip="Nanonis-style slider with ticks below and arrow handle",
+    group="MFLI Controls",
+    xml=SLIDER_DOM_XML,
+)
+
+
+SWITCH_DOM_XML = """
+<ui language="c++">
+    <widget class="NanonisSwitch" name="nanonisSwitch">
+        <property name="geometry">
+            <rect><x>0</x><y>0</y><width>150</width><height>24</height></rect>
+        </property>
+        <property name="text"><string>Controller</string></property>
+        <property name="checkable"><bool>true</bool></property>
+    </widget>
+</ui>
+"""
+
+QPyDesignerCustomWidgetCollection.registerCustomWidget(
+    NanonisSwitch,
+    module="nanonis_spinbox",
+    tool_tip="Compact GTK/Nanonis-style on/off toggle",
+    group="MFLI Controls",
+    xml=SWITCH_DOM_XML,
 )
