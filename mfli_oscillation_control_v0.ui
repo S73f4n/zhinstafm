@@ -935,13 +935,12 @@
             </item>
             <item row="11" column="0">
              <widget class="QLabel" name="phaseLockTitle">
-              <property name="text"><string>Lock</string></property>
+              <property name="text"><string>PLL Lock</string></property>
              </widget>
             </item>
             <item row="11" column="1">
-             <widget class="QLabel" name="phaseLockValue">
-              <property name="text"><string>—</string></property>
-              <property name="alignment"><set>Qt::AlignCenter</set></property>
+             <widget class="NanonisLed" name="phaseLockValue">
+              <property name="toolTip"><string>PLL lock state</string></property>
              </widget>
             </item>
             <item row="12" column="0" colspan="2">
@@ -983,6 +982,11 @@
   <customwidget>
    <class>NanonisLockButton</class>
    <extends>QAbstractButton</extends>
+   <header>nanonis_spinbox.py</header>
+  </customwidget>
+  <customwidget>
+   <class>NanonisLed</class>
+   <extends>QWidget</extends>
    <header>nanonis_spinbox.py</header>
   </customwidget>
  </customwidgets>

@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisLockButton, NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
+from nanonis_spinbox import NanonisLed, NanonisLockButton, NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
 
 from zhinst.toolkit import Session
 
@@ -1136,6 +1136,7 @@ def load_ui(path: Path) -> QMainWindow:
     loader.registerCustomWidget(NanonisSlider)
     loader.registerCustomWidget(NanonisSwitch)
     loader.registerCustomWidget(NanonisLockButton)
+    loader.registerCustomWidget(NanonisLed)
     try:
         window = loader.load(ui_file)
     finally:
@@ -1547,7 +1548,7 @@ class OscillationControlApp(QObject):
         self.phase_p_slider = self.widget(NanonisSlider, "phasePSlider")
         self.phase_i = self.widget(NanonisSpinBox, "phaseI")
         self.phase_i_slider = self.widget(NanonisSlider, "phaseISlider")
-        self.phase_lock_label = self.widget(QLabel, "phaseLockValue")
+        self.phase_lock_led = self.widget(NanonisLed, "phaseLockValue")
 
         # Amplitude-output values and limits
         self.amp_center = self.widget(NanonisSpinBox, "ampCenter")
@@ -2482,7 +2483,7 @@ class OscillationControlApp(QObject):
         if "phase_value" in d:
             self.phase_value_label.setValue(float(d["phase_value"]))
         if "phase_locked" in d:
-            self.phase_lock_label.setText("LOCKED" if d["phase_locked"] else "UNLOCKED")
+            self.phase_lock_led.setOn(bool(d["phase_locked"]))
 
         if "amp_error" in d:
             # Keep the actual measured amplitude based on the instantaneous

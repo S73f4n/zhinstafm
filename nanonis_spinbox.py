@@ -400,6 +400,82 @@ class NanonisSwitch(QAbstractButton):
             )
 
 
+class NanonisLed(QWidget):
+    """Read-only LED-style status indicator painted entirely with Qt."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._on = False
+        self._known = False
+        self.setFixedSize(28, 28)
+        self.setToolTip("PLL lock state unknown")
+
+    def sizeHint(self) -> QSize:
+        return QSize(28, 28)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(28, 28)
+
+    def isOn(self) -> bool:
+        return bool(self._on)
+
+    def setOn(self, on: bool) -> None:
+        self._known = True
+        self._on = bool(on)
+        self.setToolTip("PLL locked" if self._on else "PLL unlocked")
+        self.update()
+
+    on = Property(bool, isOn, setOn)
+
+    def setUnknown(self) -> None:
+        self._known = False
+        self._on = False
+        self.setToolTip("PLL lock state unknown")
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        side = float(min(self.width(), self.height()))
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+
+        if self._known and self._on:
+            # Bright halo when locked.
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(70, 230, 90, 65))
+            halo_d = side * 0.94
+            painter.drawEllipse(
+                QRectF(cx - halo_d / 2.0, cy - halo_d / 2.0, halo_d, halo_d)
+            )
+            border = QColor(30, 125, 42)
+            fill = QColor(75, 225, 90)
+        else:
+            border = QColor(115, 115, 115)
+            fill = QColor(145, 145, 145) if self._known else QColor(175, 175, 175)
+
+        led_d = side * 0.62
+        led = QRectF(cx - led_d / 2.0, cy - led_d / 2.0, led_d, led_d)
+
+        painter.setPen(QPen(border, 1.4))
+        painter.setBrush(fill)
+        painter.drawEllipse(led)
+
+        # Specular highlight makes the circular indicator read as an LED.
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 255, 255, 160 if self._on else 65))
+        painter.drawEllipse(
+            QRectF(
+                led.left() + led_d * 0.17,
+                led.top() + led_d * 0.14,
+                led_d * 0.28,
+                led_d * 0.20,
+            )
+        )
+
+
 class NanonisLockButton(QAbstractButton):
     """Small checkable lock icon for linked lower/upper range controls.
 

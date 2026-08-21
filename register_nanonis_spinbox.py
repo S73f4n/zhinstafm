@@ -10,7 +10,7 @@ bash:
 """
 
 from PySide6.QtDesigner import QPyDesignerCustomWidgetCollection
-from nanonis_spinbox import NanonisSlider, NanonisSpinBox, NanonisSwitch
+from nanonis_spinbox import NanonisLed, NanonisLockButton, NanonisSlider, NanonisSpinBox, NanonisSwitch
 
 
 DOM_XML = """
@@ -85,4 +85,44 @@ QPyDesignerCustomWidgetCollection.registerCustomWidget(
     tool_tip="Compact GTK/Nanonis-style on/off toggle",
     group="MFLI Controls",
     xml=SWITCH_DOM_XML,
+)
+
+
+LOCK_DOM_XML = """
+<ui language="c++">
+    <widget class="NanonisLockButton" name="nanonisLockButton">
+        <property name="geometry">
+            <rect><x>0</x><y>0</y><width>26</width><height>34</height></rect>
+        </property>
+        <property name="checkable"><bool>true</bool></property>
+    </widget>
+</ui>
+"""
+
+QPyDesignerCustomWidgetCollection.registerCustomWidget(
+    NanonisLockButton,
+    module="nanonis_spinbox",
+    tool_tip="Small lock toggle for linked lower/upper ranges",
+    group="MFLI Controls",
+    xml=LOCK_DOM_XML,
+)
+
+
+LED_DOM_XML = """
+<ui language="c++">
+    <widget class="NanonisLed" name="nanonisLed">
+        <property name="geometry">
+            <rect><x>0</x><y>0</y><width>28</width><height>28</height></rect>
+        </property>
+        <property name="on"><bool>false</bool></property>
+    </widget>
+</ui>
+"""
+
+QPyDesignerCustomWidgetCollection.registerCustomWidget(
+    NanonisLed,
+    module="nanonis_spinbox",
+    tool_tip="Read-only LED status indicator",
+    group="MFLI Controls",
+    xml=LED_DOM_XML,
 )
