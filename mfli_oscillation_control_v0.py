@@ -45,10 +45,10 @@ AMP_SETPOINT_SLIDER_STEPS = 100_000
 
 # Host-side averaging. The MFLI PLL itself continues running at its hardware
 # update rate; these windows only affect the displayed/centered values.
-CENTER_AVERAGE_STREAM_SAMPLES = 32
+CENTER_AVERAGE_STREAM_SAMPLES = 10000
 CENTER_AVERAGE_MIN_S = 0.020
 CENTER_AVERAGE_MAX_S = 0.500
-CENTER_AVERAGE_FALLBACK_S = 0.050
+CENTER_AVERAGE_FALLBACK_S = 0.500
 AMP_ERROR_RMS_WINDOW_S = 0.250
 
 T = TypeVar("T", bound=QObject)
