@@ -70,6 +70,30 @@ AMP_ERROR_RMS_WINDOW_S = 0.250
 T = TypeVar("T", bound=QObject)
 
 
+def _restore_numeric_settings(settings: Any, controls: dict[str, Any]) -> set[str]:
+    """Restore valid numeric settings without replacing widget defaults on bad input."""
+    restored: set[str] = set()
+    if not isinstance(settings, dict):
+        return restored
+    for key, control in controls.items():
+        if key not in settings or isinstance(settings[key], bool):
+            continue
+        try:
+            value = float(settings[key])
+            if not math.isfinite(value) or not control.minimum() <= value <= control.maximum():
+                continue
+            if isinstance(control, QSpinBox):
+                if not value.is_integer():
+                    continue
+                control.setValue(int(value))
+            else:
+                control.setValue(value)
+            restored.add(key)
+        except (TypeError, ValueError, OverflowError):
+            continue
+    return restored
+
+
 def _last_scalar(payload: Any) -> float | None:
     """Extract the newest scalar from a zhinst-toolkit poll payload."""
     if payload is None:
@@ -1351,6 +1375,37 @@ class FrequencySweepWindow(QObject):
         self.upper_offset.valueChanged.connect(self._upper_offset_changed)
         self.range_lock.toggled.connect(self._range_lock_toggled)
 
+    def _settings_controls(self) -> dict[str, Any]:
+        return {
+            "lower_offset_hz": self.lower_offset,
+            "upper_offset_hz": self.upper_offset,
+            "points": self.points,
+            "period_s": self.period,
+            "initial_settling_s": self.initial_settling,
+        }
+
+    def saved_settings(self) -> dict[str, float | int]:
+        return {key: control.value() for key, control in self._settings_controls().items()}
+
+    def restore_settings(self, settings: Any) -> None:
+        """Restore sweep inputs before prepare() can initialize the range."""
+        previous_lower = float(self.lower_offset.value())
+        previous_upper = float(self.upper_offset.value())
+        self._range_linking = True
+        try:
+            restored = _restore_numeric_settings(settings, self._settings_controls())
+            lower = float(self.lower_offset.value())
+            upper = float(self.upper_offset.value())
+            if {"lower_offset_hz", "upper_offset_hz"} <= restored and lower < upper:
+                self._range_initialized = True
+                scale = max(abs(lower), abs(upper), 1.0)
+                self.range_lock.setChecked(abs(lower + upper) <= 1e-9 * scale)
+            else:
+                self.lower_offset.setValue(previous_lower)
+                self.upper_offset.setValue(previous_upper)
+        finally:
+            self._range_linking = False
+
     def _set_symmetric_range(self, magnitude_hz: float) -> None:
         magnitude = abs(float(magnitude_hz))
         self._range_linking = True
@@ -1589,6 +1644,7 @@ class OscillationControlApp(QObject):
         super().__init__()
         self.window = load_ui(ui_path)
         self.config_path = ui_path.with_name(CONNECTION_CONFIG_FILENAME)
+        self._settings_data: dict[str, Any] = {}
         self._updating_from_device = False
         self._shutting_down = False
         self._phase_range_linking = False
@@ -1596,8 +1652,8 @@ class OscillationControlApp(QObject):
         self.sweep_window: FrequencySweepWindow | None = None
 
         self._bind_widgets()
-        self._load_connection_settings()
         self._configure_nanonis_spinboxes()
+        self._load_settings()
         self._connect_gui_signals()
         self._build_worker()
 
@@ -1670,14 +1726,28 @@ class OscillationControlApp(QObject):
         self.amp_actual_min_label = self.widget(NanonisSpinBox, "ampActualMinValue")
         self.amp_actual_max_label = self.widget(NanonisSpinBox, "ampActualMaxValue")
 
-    def _load_connection_settings(self) -> None:
-        """Load the last LabOne host and MFLI device name from YAML."""
+    def _advisor_settings_controls(self) -> dict[str, Any]:
+        return {
+            "q_factor": self.advisor_q,
+            "gain": self.advisor_gain,
+            "delay_s": self.amp_advisor_delay,
+            "phase_bandwidth_hz": self.advisor_target_bw,
+            "amplitude_bandwidth_hz": self.amp_advisor_target_bw,
+        }
+
+    def _load_settings(self) -> None:
+        """Load connection/advisor inputs and retain sweep inputs for lazy restoration."""
         if not self.config_path.exists():
             return
 
         try:
             data = yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}
+            if not isinstance(data, dict):
+                raise ValueError("Settings file must contain a YAML mapping.")
+            self._settings_data = data
             connection = data.get("connection", {})
+            if not isinstance(connection, dict):
+                connection = {}
             host = str(connection.get("host", "")).strip()
             device = str(connection.get("device", "")).strip()
 
@@ -1685,26 +1755,38 @@ class OscillationControlApp(QObject):
                 self.host_edit.setText(host)
             if device:
                 self.serial_edit.setText(device)
+            _restore_numeric_settings(data.get("pll_advisor"), self._advisor_settings_controls())
         except Exception as exc:
             self.statusbar.showMessage(
                 f"Could not load {self.config_path.name}: {type(exc).__name__}: {exc}",
                 12000,
             )
 
-    def _save_connection_settings(self) -> None:
-        """Persist the current LabOne host and MFLI device name to YAML."""
-        data = {
+    def _save_settings(self) -> None:
+        """Persist connection/advisor/sweep inputs, preserving unopened sweep settings."""
+        data = dict(self._settings_data)
+        sections = {
             "connection": {
                 "host": self.host_edit.text().strip(),
                 "device": self.serial_edit.text().strip(),
-            }
+            },
+            "pll_advisor": {
+                key: float(control.value())
+                for key, control in self._advisor_settings_controls().items()
+            },
         }
+        if self.sweep_window is not None:
+            sections["frequency_sweep"] = self.sweep_window.saved_settings()
+        for name, values in sections.items():
+            previous = data.get(name, {})
+            data[name] = {**(previous if isinstance(previous, dict) else {}), **values}
 
         try:
             self.config_path.write_text(
                 yaml.safe_dump(data, sort_keys=False),
                 encoding="utf-8",
             )
+            self._settings_data = data
         except Exception as exc:
             self.statusbar.showMessage(
                 f"Could not save {self.config_path.name}: {type(exc).__name__}: {exc}",
@@ -2317,6 +2399,7 @@ class OscillationControlApp(QObject):
         if self.sweep_window is None:
             ui_path = Path(__file__).resolve().with_name(SWEEP_UI_FILENAME)
             self.sweep_window = FrequencySweepWindow(ui_path)
+            self.sweep_window.restore_settings(self._settings_data.get("frequency_sweep"))
             self.sweep_window.start_requested.connect(self.sweep_requested.emit)
             self.sweep_window.stop_requested.connect(self.sweep_stop_requested.emit)
             self.sweep_window.apply_requested.connect(self._apply_sweep_fit)
@@ -2461,7 +2544,7 @@ class OscillationControlApp(QObject):
         self.advise_button.setText("Advise Pha")
 
     def _connect_with_saved_settings(self) -> None:
-        self._save_connection_settings()
+        self._save_settings()
         self.connect_requested.emit(
             self.host_edit.text(),
             self.serial_edit.text(),
@@ -2660,7 +2743,7 @@ class OscillationControlApp(QObject):
         if self._shutting_down:
             return
         self._shutting_down = True
-        self._save_connection_settings()
+        self._save_settings()
         self.shutdown_requested.emit()
         self.worker_thread.quit()
         self.worker_thread.wait(1500)

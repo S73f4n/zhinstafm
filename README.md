@@ -29,7 +29,7 @@ The fast feedback loops remain inside the MFLI. Python provides the operator GUI
 - manual Signal Output amplitude control while PID3 is disabled
 - P/I spinboxes and sliders for both controllers
 - Nanonis-style SI-prefix numeric entry
-- YAML persistence for connection settings
+- YAML persistence for connection, advisor, and sweep settings
 
 ### Resonance characterization
 
@@ -254,9 +254,9 @@ python mfli_oscillation_control_v0_nanonis.py
 
 ---
 
-## Connection settings
+## Saved settings
 
-The application stores the most recently used LabOne host and MFLI device name in:
+The application stores connection settings, PLL Advisor inputs, and Frequency Sweep inputs in:
 
 ```text
 mfli_connection.yaml
@@ -268,9 +268,21 @@ Example:
 connection:
   host: 192.168.1.100
   device: DEV1234
+pll_advisor:
+  q_factor: 10000.0
+  gain: 1.0e-6
+  delay_s: 0.0
+  phase_bandwidth_hz: 100.0
+  amplitude_bandwidth_hz: 10.0
+frequency_sweep:
+  lower_offset_hz: -1000.0
+  upper_offset_hz: 1000.0
+  points: 256
+  period_s: 0.1
+  initial_settling_s: 0.01
 ```
 
-The file is loaded on startup and saved when connecting and when closing the application.
+The file is loaded on startup and saved when connecting and when closing the application. Both advisor bandwidths are saved. Sweep settings are restored when the sweep window is first opened; saved bounds take precedence over the main window's default sweep range. Previously saved sweep settings are retained even if that window is never opened during a session. Frequency/time values use Hz/seconds, and gain stores the numerical Gain field value. Missing or invalid values retain their defaults.
 
 Because this is usually machine-specific, it is a good candidate for `.gitignore`:
 
@@ -454,7 +466,7 @@ This software is an experimental control interface, not a machine-safety or equi
 
 Useful next steps include:
 
-- persistent storage for UI slider ranges and Advisor parameters
+- persistent storage for UI slider ranges
 - user-selectable demodulator / oscillator / PID routing
 - selectable resonance-fit interval
 - sweep-data export and logging
