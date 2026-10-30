@@ -53,9 +53,11 @@ Maximum R / output amplitude -> Gain
 Phase at resonance   -> Phase Ref.
 ```
 
-Q is obtained from a local arctangent fit to the unwrapped phase around resonance, using `Q = f0 / 2 * abs(dphi/df)` with phase in radians ([phase-slope relation, Eq. 4-3](https://infoscience.epfl.ch/bitstreams/bf86b080-c55a-4343-a013-df10976c634e/download)). The default fit interval is ±45° about the phase at resonance, configurable with `PHASE_Q_FIT_HALF_RANGE_DEG`. The displayed bandwidth is `f0 / Q`, and **Apply Fit** transfers this phase-derived Q to the main window for subsequent PID advising. The amplitude fit supplies the center frequency and amplitude curve. At least five distinct phase samples spanning resonance are required; otherwise, narrow the sweep range or increase the point count.
+Q is obtained from a local arctangent fit to the unwrapped phase around resonance, using `Q = f0 / 2 * abs(dphi/df)` with phase in radians ([phase-slope relation, Eq. 4-3](https://infoscience.epfl.ch/bitstreams/bf86b080-c55a-4343-a013-df10976c634e/download)). The default fit interval is ±45° about the phase at resonance, configurable with `PHASE_Q_FIT_HALF_RANGE_DEG`. The displayed bandwidth is `f0 / Q`, and **Apply Fit** transfers this phase-derived Q to the main window for subsequent PID advising. The amplitude fit supplies the amplitude curve and the default center frequency. At least five distinct phase samples spanning resonance are required; otherwise, narrow the sweep range or increase the point count.
 
 The **Raw Res. Phase** comes from a separate arctangent fit over the full phase sweep. This full fit supplies the plotted phase curve, the display shift that places resonance at -90°, and the raw phase reference used by **Apply Fit**. Q remains the result of the local slope fit.
+
+The **Centre from** dropdown selects **Amplitude Fit** (the default) or **Phase Fit** for the displayed resonance frequency. Phase Fit determines the inflection frequency of an arctangent with a free center. Switching the selection reuses the completed sweep, updates the derived fit results and plot marker, and determines which center **Apply Fit** copies to the main window. The selection is saved with the sweep settings.
 
 The sweep window displays **Gain (V/V)** as the maximum finite measured R divided by the absolute set output amplitude captured from the instrument at sweep start. **Apply Fit** copies this Gain into the PLL Advisor panel, where it is also saved with the other advisor settings. This uses LabOne's advisor convention of R in RMS volts divided directly by drive amplitude in peak volts ([MFLI gain example](https://docs.zhinst.com/mfli_user_manual/tutorials/classic/tutorial_pid.html#simulating-the-device-under-test)); for example, 4 mV RMS / 100 mV peak gives Gain = 0.04. A zero output amplitude cannot be used to determine Gain.
 
@@ -283,6 +285,7 @@ frequency_sweep:
   points: 256
   period_s: 0.1
   initial_settling_s: 0.01
+  center_source: amplitude
 ```
 
 The file is loaded on startup and saved when connecting and when closing the application. Both advisor bandwidths are saved. Sweep settings are restored when the sweep window is first opened; saved bounds take precedence over the main window's default sweep range. Previously saved sweep settings are retained even if that window is never opened during a session. Frequency/time values use Hz/seconds, and gain stores the numerical Gain field value. Missing or invalid values retain their defaults.

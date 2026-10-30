@@ -20,6 +20,7 @@ from PySide6.QtCore import QEvent, QFile, QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -150,14 +151,18 @@ def fit_resonance_sweep(
     frequency_hz: np.ndarray,
     amplitude_v: np.ndarray,
     phase_deg: np.ndarray,
+    center_source: str = "amplitude",
 ) -> dict[str, Any]:
-    """Fit the center from R, Q from local slope, and phase from a full arctan fit.
+    """Fit the selected center, Q from local slope, and phase from a full arctan fit.
 
     Fit an arctangent to unwrapped phase near resonance, with a free offset
     and slope. Q = f0 * abs(dphi/df) / 2, where phase is in radians. The
     raw phase at resonance comes from a separate arctangent fit over the full
-    phase sweep. The amplitude fit supplies the center and amplitude curve.
+    phase sweep. The center comes from the amplitude fit by default, or from
+    the inflection point of a free-center arctangent fit when requested.
     """
+    if center_source not in ("amplitude", "phase"):
+        raise ValueError("Centre source must be 'amplitude' or 'phase'.")
     f = np.asarray(frequency_hz, dtype=float).reshape(-1)
     r = np.asarray(amplitude_v, dtype=float).reshape(-1)
     phi = np.asarray(phase_deg, dtype=float).reshape(-1)
@@ -219,6 +224,7 @@ def fit_resonance_sweep(
         maxfev=30000,
     )
     baseline, resonance_amplitude, center_hz, amplitude_q_factor = map(float, popt)
+    amplitude_center_hz = center_hz
     if amplitude_q_factor <= 0 or center_hz <= 0:
         raise ValueError("Resonance fit returned non-physical center frequency or Q.")
 
@@ -228,6 +234,34 @@ def fit_resonance_sweep(
 
     # Select a local phase interval independently of the amplitude linewidth.
     phi_unwrapped = np.rad2deg(np.unwrap(np.deg2rad(phi)))
+    if center_source == "phase":
+        # Fit the inflection frequency independently of the amplitude peak and
+        # phase offset. Normalize frequency to keep the optimization stable.
+        center_scale_hz = span / 2.0
+        center_offset = (f - amplitude_center_hz) / center_scale_hz
+        phase_rad = np.deg2rad(phi_unwrapped)
+        slope_guess, offset_guess = np.polyfit(center_offset, phase_rad, 1)
+
+        def phase_center_model(
+            offset: np.ndarray, phase_center_rad: float, slope_rad: float, center: float
+        ) -> np.ndarray:
+            return phase_center_rad + np.arctan(slope_rad * (offset - center))
+
+        center_popt, _ = curve_fit(
+            phase_center_model,
+            center_offset,
+            phase_rad,
+            p0=[float(offset_guess), float(slope_guess), 0.0],
+            bounds=(
+                [-np.inf, -np.inf, float(center_offset[0])],
+                [np.inf, np.inf, float(center_offset[-1])],
+            ),
+            maxfev=30000,
+        )
+        center_hz = amplitude_center_hz + float(center_popt[2]) * center_scale_hz
+        if not (math.isfinite(center_hz) and center_hz > 0):
+            raise ValueError("Phase fit returned a non-physical center frequency.")
+
     phase_center_guess = float(np.interp(center_hz, f, phi_unwrapped))
     phase_mask = (
         np.abs(phi_unwrapped - phase_center_guess) <= PHASE_Q_FIT_HALF_RANGE_DEG
@@ -288,7 +322,7 @@ def fit_resonance_sweep(
 
     fit_frequency = np.linspace(float(f[0]), float(f[-1]), 1200)
     fit_amplitude = _resonator_amplitude_model(
-        fit_frequency, baseline, resonance_amplitude, center_hz, amplitude_q_factor
+        fit_frequency, baseline, resonance_amplitude, amplitude_center_hz, amplitude_q_factor
     )
     fit_phase_unwrapped = np.rad2deg(
         phase_model((fit_frequency - center_hz) / frequency_scale_hz, *phase_popt)
@@ -297,6 +331,8 @@ def fit_resonance_sweep(
 
     return {
         "center_hz": center_hz,
+        "center_source": center_source,
+        "amplitude_center_hz": amplitude_center_hz,
         "q_factor": q_factor,
         "bandwidth_hz": bandwidth_hz,
         "phase_deg": phase_center_deg,
@@ -1264,6 +1300,7 @@ class FrequencySweepWindow(QObject):
         super().__init__()
         self.window = load_ui(ui_path)
         self._last_fit: dict[str, Any] | None = None
+        self._last_sweep_data: dict[str, Any] | None = None
         self._range_initialized = False
         self._range_linking = False
         self._bind_widgets()
@@ -1295,6 +1332,7 @@ class FrequencySweepWindow(QObject):
         self.status_label = self.widget(QLabel, "sweepStatusLabel")
 
         self.fit_center = self.widget(NanonisSpinBox, "fitCenterValue")
+        self.center_source = self.widget(QComboBox, "centerSourceComboBox")
         self.fit_q = self.widget(NanonisSpinBox, "fitQValue")
         self.fit_gain = self.widget(NanonisSpinBox, "fitGainValue")
         self.fit_bw = self.widget(NanonisSpinBox, "fitBwValue")
@@ -1386,6 +1424,12 @@ class FrequencySweepWindow(QObject):
         self.lower_offset.valueChanged.connect(self._lower_offset_changed)
         self.upper_offset.valueChanged.connect(self._upper_offset_changed)
         self.range_lock.toggled.connect(self._range_lock_toggled)
+        self.center_source.currentIndexChanged.connect(self._center_source_changed)
+
+    @Slot(int)
+    def _center_source_changed(self, _index: int) -> None:
+        if self._last_sweep_data is not None:
+            self.on_sweep_finished(self._last_sweep_data)
 
     def _settings_controls(self) -> dict[str, Any]:
         return {
@@ -1396,8 +1440,11 @@ class FrequencySweepWindow(QObject):
             "initial_settling_s": self.initial_settling,
         }
 
-    def saved_settings(self) -> dict[str, float | int]:
-        return {key: control.value() for key, control in self._settings_controls().items()}
+    def saved_settings(self) -> dict[str, Any]:
+        return {
+            **{key: control.value() for key, control in self._settings_controls().items()},
+            "center_source": "phase" if self.center_source.currentIndex() == 1 else "amplitude",
+        }
 
     def restore_settings(self, settings: Any) -> None:
         """Restore sweep inputs before prepare() can initialize the range."""
@@ -1417,6 +1464,8 @@ class FrequencySweepWindow(QObject):
                 self.upper_offset.setValue(previous_upper)
         finally:
             self._range_linking = False
+        if isinstance(settings, dict) and settings.get("center_source") in ("amplitude", "phase"):
+            self.center_source.setCurrentIndex(1 if settings["center_source"] == "phase" else 0)
 
     def _set_symmetric_range(self, magnitude_hz: float) -> None:
         magnitude = abs(float(magnitude_hz))
@@ -1503,6 +1552,7 @@ class FrequencySweepWindow(QObject):
             return
 
         self._last_fit = None
+        self._last_sweep_data = None
         self.apply_button.setEnabled(False)
         self.progress.setValue(0)
         self.status_label.setText("Starting frequency sweep...")
@@ -1516,6 +1566,7 @@ class FrequencySweepWindow(QObject):
 
     @Slot()
     def on_sweep_started(self) -> None:
+        self._last_sweep_data = None
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.apply_button.setEnabled(False)
@@ -1534,6 +1585,7 @@ class FrequencySweepWindow(QObject):
 
     @Slot(dict)
     def on_sweep_finished(self, data: dict) -> None:
+        self._last_sweep_data = dict(data)
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.progress.setValue(100)
@@ -1554,7 +1606,8 @@ class FrequencySweepWindow(QObject):
             if not math.isfinite(gain) or gain <= 0:
                 raise ValueError("Sweep Gain must be finite and positive.")
             self.fit_gain.setValue(gain)
-            fit = fit_resonance_sweep(frequency, amplitude, phase)
+            center_source = "phase" if self.center_source.currentIndex() == 1 else "amplitude"
+            fit = fit_resonance_sweep(frequency, amplitude, phase, center_source=center_source)
             fit["gain"] = gain
         except Exception as exc:
             self._last_fit = None
