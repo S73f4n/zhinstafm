@@ -717,7 +717,7 @@ class MFLIWorker(QObject):
         self,
         target_bw_hz: float,
         q_factor: float,
-        gain_m_per_v: float,
+        gain_amp_per_exc: float,
         resonant_frequency_hz: float,
     ) -> None:
         """Run the LabOne PID Advisor for PLL1 and transfer the result to PID1.
@@ -742,8 +742,8 @@ class MFLIWorker(QObject):
         if q_factor <= 0:
             self.advisor_failed.emit("PLL Advisor Q factor must be > 0.")
             return
-        if gain_m_per_v <= 0:
-            self.advisor_failed.emit("PLL Advisor Amp./Exc. gain must be > 0 m/V.")
+        if gain_amp_per_exc <= 0:
+            self.advisor_failed.emit("PLL Advisor Gain must be > 0 V/V.")
             return
         if resonant_frequency_hz <= 0:
             self.advisor_failed.emit("PLL Advisor resonant frequency must be > 0 Hz.")
@@ -774,7 +774,7 @@ class MFLIWorker(QObject):
             # gain node.  For Zurich's Resonator Frequency model the dominant
             # parameters are f_res and Q, but the generic module still exposes
             # DUT gain and accepts it for non-internal-PLL models.
-            advisor.dut.gain(float(gain_m_per_v))
+            advisor.dut.gain(float(gain_amp_per_exc))
 
             # Use the present controller values as optimization starting points.
             advisor.pid.p(float(self.phase.p()))
@@ -810,7 +810,7 @@ class MFLIWorker(QObject):
                 {
                     "target_bw_hz": float(target_bw_hz),
                     "q_factor": float(q_factor),
-                    "gain_m_per_v": float(gain_m_per_v),
+                    "gain_amp_per_exc": float(gain_amp_per_exc),
                     "resonant_frequency_hz": float(resonant_frequency_hz),
                     "advised_p": advised_p,
                     "advised_i": advised_i,
@@ -1003,6 +1003,11 @@ class MFLIWorker(QObject):
         original_frequency = float(oscillator.freq())
 
         try:
+            # Capture the actual drive setting used for this sweep, rather than
+            # using a potentially changed output amplitude when Apply is clicked.
+            output_amplitude_v = float(self.signal_output.amplitudes[0]())
+            if not math.isfinite(output_amplitude_v) or output_amplitude_v == 0:
+                raise ValueError("Set a finite, non-zero output amplitude before sweeping to determine Gain.")
             sweeper = self.session.modules.sweeper
             sweeper.device(self.device)
             sample_node = self.device.demods[0].sample
@@ -1090,6 +1095,7 @@ class MFLIWorker(QObject):
                     "frequency_hz": frequency.tolist(),
                     "amplitude_v": amplitude.tolist(),
                     "phase_deg": phase_deg.tolist(),
+                    "output_amplitude_v": output_amplitude_v,
                 }
             )
 
@@ -1290,6 +1296,7 @@ class FrequencySweepWindow(QObject):
 
         self.fit_center = self.widget(NanonisSpinBox, "fitCenterValue")
         self.fit_q = self.widget(NanonisSpinBox, "fitQValue")
+        self.fit_gain = self.widget(NanonisSpinBox, "fitGainValue")
         self.fit_bw = self.widget(NanonisSpinBox, "fitBwValue")
         self.fit_phase = self.widget(NanonisSpinBox, "fitPhaseValue")
         self.phase_display_shift = self.widget(NanonisSpinBox, "phaseDisplayShiftValue")
@@ -1311,6 +1318,7 @@ class FrequencySweepWindow(QObject):
             (self.center_value, "Hz"),
             (self.fit_center, "Hz"),
             (self.fit_q, ""),
+            (self.fit_gain, "V/V"),
             (self.fit_bw, "Hz"),
             (self.fit_phase, "deg"),
             (self.phase_display_shift, "deg"),
@@ -1335,6 +1343,10 @@ class FrequencySweepWindow(QObject):
             control.setStyleSheet(readback_style)
 
         self.fit_q.setToolTip("Q from the fitted phase slope around resonance.")
+        self.fit_gain.setToolTip(
+            "Maximum measured R divided by the absolute output amplitude captured "
+            "at sweep start (R in V RMS, output in V peak). Apply Fit copies this Gain to PLL Advisor."
+        )
         self.fit_bw.setToolTip("Resonance frequency divided by the phase-slope Q.")
         self.fit_phase.setToolTip(
             "Raw phase at resonance from the full arctangent fit. "
@@ -1507,6 +1519,7 @@ class FrequencySweepWindow(QObject):
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.apply_button.setEnabled(False)
+        self.fit_gain.setValue(0.0)
         self.status_label.setText(
             "Sweeping Oscillator 1; recording Demodulator 1 R/Phase..."
         )
@@ -1531,7 +1544,18 @@ class FrequencySweepWindow(QObject):
         center_used = float(data["center_hz"])
 
         try:
+            output_amplitude_v = abs(float(data["output_amplitude_v"]))
+            if not math.isfinite(output_amplitude_v) or output_amplitude_v == 0:
+                raise ValueError("A finite, non-zero sweep output amplitude is required to determine Gain.")
+            finite_amplitude = amplitude[np.isfinite(amplitude)]
+            if not finite_amplitude.size:
+                raise ValueError("No finite R samples are available to determine Gain.")
+            gain = float(np.max(finite_amplitude)) / output_amplitude_v
+            if not math.isfinite(gain) or gain <= 0:
+                raise ValueError("Sweep Gain must be finite and positive.")
+            self.fit_gain.setValue(gain)
             fit = fit_resonance_sweep(frequency, amplitude, phase)
+            fit["gain"] = gain
         except Exception as exc:
             self._last_fit = None
             self.apply_button.setEnabled(False)
@@ -1552,7 +1576,7 @@ class FrequencySweepWindow(QObject):
         self.status_label.setText(
             f"Phase display shifted by {self.phase_display_shift.value():+.6g} deg "
             "so resonance is at -90 deg. Review the curves, then Apply Fit "
-            "to write this shift to Demod 1 phase and copy Q, center frequency "
+            "to write this shift to Demod 1 phase and copy Q, Gain, center frequency "
             "and phase reference to Oscillation Control."
         )
 
@@ -1809,7 +1833,7 @@ class OscillationControlApp(QObject):
             (self.amp_lower, "V"),
             (self.amp_upper, "V"),
             (self.advisor_q, ""),
-            (self.advisor_gain, "m/V"),
+            (self.advisor_gain, "V/V"),
             (self.amp_advisor_target_bw, "Hz"),
             (self.advisor_target_bw, "Hz"),
             (self.amp_advisor_delay, "s"),
@@ -2435,19 +2459,21 @@ class OscillationControlApp(QObject):
             return
 
         q_factor = float(fit["q_factor"])
+        gain = float(fit["gain"])
         center_hz = float(fit["center_hz"])
         phase_deg = float(fit["phase_deg"])
         display_shift_deg = float(fit["phase_display_shift_deg"])
 
         self.set_requested.emit("demod1_phase_deg", display_shift_deg)
 
-        # advisorQ is local UI state. Center and phase reference use their
+        # Advisor Q/Gain are local UI state. Center and phase reference use their
         # normal valueChanged paths, so they are also written to the MFLI.
         self.advisor_q.setValue(q_factor)
+        self.advisor_gain.setValue(gain)
         self.phase_center.setValue(center_hz)
         self.phase_setpoint.setValue(phase_deg)
         self.statusbar.showMessage(
-            f"Resonance fit applied: f0={center_hz:.9g} Hz, Q={q_factor:.7g}, "
+            f"Resonance fit applied: f0={center_hz:.9g} Hz, Q={q_factor:.7g}, Gain={gain:.7g} V/V, "
             f"phase={phase_deg:.5g} deg, Demod 1 phase={display_shift_deg:.6g} deg.",
             15000,
         )
@@ -2468,7 +2494,7 @@ class OscillationControlApp(QObject):
             self.statusbar.showMessage("Enter a Q factor > 0.", 8000)
             return
         if gain <= 0:
-            self.statusbar.showMessage("Enter an Amp./Exc. gain > 0 m/V.", 8000)
+            self.statusbar.showMessage("Enter a Gain > 0 V/V.", 8000)
             return
         if resonant_frequency <= 0:
             self.statusbar.showMessage(
