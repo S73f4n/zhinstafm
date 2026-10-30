@@ -54,6 +54,8 @@ Phase at resonance   -> Phase Ref.
 
 Q is obtained from a local arctangent fit to the unwrapped phase around resonance, using `Q = f0 / 2 * abs(dphi/df)` with phase in radians ([phase-slope relation, Eq. 4-3](https://infoscience.epfl.ch/bitstreams/bf86b080-c55a-4343-a013-df10976c634e/download)). The default fit interval is ±45° about the phase at resonance, configurable with `PHASE_Q_FIT_HALF_RANGE_DEG`. The displayed bandwidth is `f0 / Q`, and **Apply Fit** transfers this phase-derived Q to the main window for subsequent PID advising. The amplitude fit supplies the center frequency and amplitude curve. At least five distinct phase samples spanning resonance are required; otherwise, narrow the sweep range or increase the point count.
 
+The **Raw Res. Phase** comes from a separate arctangent fit over the full phase sweep. This full fit supplies the plotted phase curve, the display shift that places resonance at -90°, and the raw phase reference used by **Apply Fit**. Q remains the result of the local slope fit.
+
 ### PID / PLL Advisor
 
 The GUI exposes the LabOne PID Advisor for both feedback loops.
