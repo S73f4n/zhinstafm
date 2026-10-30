@@ -38,6 +38,8 @@ from zhinst.toolkit import Session
 
 PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
+PHASE_DEMOD_INDEX = 1    # LabOne GUI "Demod Phase 2"
+AMPLITUDE_DEMOD_INDEX = 0  # LabOne GUI "Demod R 1"
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
 SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
@@ -238,13 +240,13 @@ class ExpectedRouting:
 
     phase_mode: int = 1
     phase_input: int = 3
-    phase_inputchannel: int = 0
+    phase_inputchannel: int = PHASE_DEMOD_INDEX
     phase_output: int = 2
     phase_outputchannel: int = 0
 
     amplitude_mode: int = 0
     amplitude_input: int = 2
-    amplitude_inputchannel: int = 0
+    amplitude_inputchannel: int = AMPLITUDE_DEMOD_INDEX
     amplitude_output: int = 0
     amplitude_outputchannel: int = 0
 
@@ -850,12 +852,12 @@ class MFLIWorker(QObject):
         initial_settling_s: float,
         center_hz: float,
     ) -> None:
-        """Sweep Oscillator 1 frequency and record Demodulator 1 X/Y.
+        """Sweep Oscillator 1; record Demodulator 1 R and Demodulator 2 phase.
 
         The sweep range is expressed as offsets relative to ``center_hz``.
         ``period_s`` is used as the minimum averaging time per sweep point,
         matching the Nanonis Frequency Sweep notion of a point period.
-        Existing Demodulator 1 filter settings are left untouched by using the
+        Existing demodulator filter settings are left untouched by using the
         Sweeper Module's manual bandwidth-control mode.
         """
         if self.session is None or self.device is None:
@@ -896,16 +898,19 @@ class MFLIWorker(QObject):
         self.sweep_started.emit()
 
         sweeper = None
-        sample_node = None
+        sample_nodes: dict[int, Any] = {}
         oscillator = self.device.oscs[0]
         original_frequency = float(oscillator.freq())
 
         try:
             sweeper = self.session.modules.sweeper
             sweeper.device(self.device)
-            sample_node = self.device.demods[0].sample
+            sample_nodes = {
+                index: self.device.demods[index].sample
+                for index in (AMPLITUDE_DEMOD_INDEX, PHASE_DEMOD_INDEX)
+            }
 
-            # Frequency sweep of Oscillator 1, recording Demodulator 1.
+            # Use the same amplitude/phase inputs as PID3 and PLL1.
             sweeper.gridnode(oscillator.freq)
             sweeper.start(float(center_hz + lower_offset_hz))
             sweeper.stop(float(center_hz + upper_offset_hz))
@@ -915,7 +920,7 @@ class MFLIWorker(QObject):
             sweeper.loopcount(1)
             sweeper.phaseunwrap(1)
 
-            # Preserve the user's Demodulator 1 bandwidth/order settings.
+            # Preserve both demodulators' bandwidth/order settings.
             sweeper.filtermode(1)         # advanced
             sweeper.bandwidthcontrol(0)   # manual: leave demodulator untouched
             sweeper.bandwidth(1.0)        # required >0 even though ignored in manual mode
@@ -930,7 +935,8 @@ class MFLIWorker(QObject):
             sweeper.averaging.tc(1.0)
             sweeper.averaging.sample(1)
 
-            sweeper.subscribe(sample_node)
+            for sample_node in sample_nodes.values():
+                sweeper.subscribe(sample_node)
             sweeper.execute()
 
             while True:
@@ -959,25 +965,39 @@ class MFLIWorker(QObject):
                 time.sleep(0.10)
 
             data = sweeper.read()
-            node_samples = data.get(sample_node)
-            if not node_samples:
-                raise RuntimeError("Sweeper returned no Demodulator 1 samples.")
+            records = {}
+            for index, sample_node in sample_nodes.items():
+                node_samples = data.get(sample_node)
+                if not node_samples:
+                    raise RuntimeError(f"Sweeper returned no Demodulator {index + 1} samples.")
 
-            record = node_samples[-1]
-            # Toolkit sweep results are typically [record_dict] per loop.
-            if isinstance(record, (list, tuple)):
-                if not record:
-                    raise RuntimeError("Sweeper returned an empty result record.")
-                record = record[0]
+                record = node_samples[-1]
+                # Toolkit sweep results are typically [record_dict] per loop.
+                if isinstance(record, (list, tuple)):
+                    if not record:
+                        raise RuntimeError(f"Sweeper returned an empty Demodulator {index + 1} record.")
+                    record = record[0]
+                records[index] = record
 
-            frequency = np.asarray(record["frequency"], dtype=float).reshape(-1)
-            x = np.asarray(record["x"], dtype=float).reshape(-1)
-            y = np.asarray(record["y"], dtype=float).reshape(-1)
-            if not (frequency.size == x.size == y.size) or frequency.size < 2:
+            amplitude_record = records[AMPLITUDE_DEMOD_INDEX]
+            phase_record = records[PHASE_DEMOD_INDEX]
+            # The grid is Oscillator 1's swept frequency. Demodulator reference
+            # frequencies can differ because of the static frequency shift.
+            frequency = np.asarray(amplitude_record["grid"], dtype=float).reshape(-1)
+            phase_grid = np.asarray(phase_record["grid"], dtype=float).reshape(-1)
+            amp_x = np.asarray(amplitude_record["x"], dtype=float).reshape(-1)
+            amp_y = np.asarray(amplitude_record["y"], dtype=float).reshape(-1)
+            phase_x = np.asarray(phase_record["x"], dtype=float).reshape(-1)
+            phase_y = np.asarray(phase_record["y"], dtype=float).reshape(-1)
+            if not (
+                frequency.size == amp_x.size == amp_y.size == phase_x.size == phase_y.size
+            ) or frequency.size < 2:
                 raise RuntimeError("Unexpected Sweeper result dimensions.")
+            if not np.array_equal(frequency, phase_grid):
+                raise RuntimeError("Demodulator 1 and 2 sweep grids do not match.")
 
-            amplitude = np.hypot(x, y)
-            phase_deg = np.rad2deg(np.angle(x + 1j * y))
+            amplitude = np.hypot(amp_x, amp_y)
+            phase_deg = np.rad2deg(np.angle(phase_x + 1j * phase_y))
 
             self.sweep_progress.emit(100, 0.0)
             self.sweep_finished.emit(
@@ -998,11 +1018,12 @@ class MFLIWorker(QObject):
                 f"Frequency sweep failed: {type(exc).__name__}: {exc}"
             )
         finally:
-            if sweeper is not None and sample_node is not None:
-                try:
-                    sweeper.unsubscribe(sample_node)
-                except Exception:
-                    pass
+            if sweeper is not None:
+                for sample_node in sample_nodes.values():
+                    try:
+                        sweeper.unsubscribe(sample_node)
+                    except Exception:
+                        pass
             try:
                 oscillator.freq(original_frequency, deep=True)
             except Exception as exc:
@@ -1254,7 +1275,7 @@ class FrequencySweepWindow(QObject):
         self.amplitude_axis.grid(True, alpha=0.3)
         self.phase_axis.clear()
         self.phase_axis.set_xlabel("Frequency Shift (Hz)")
-        self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
+        self.phase_axis.set_ylabel("Demod 2 Phase (deg)")
         self.phase_axis.grid(True, alpha=0.3)
         self.amplitude_canvas.draw_idle()
         self.phase_canvas.draw_idle()
@@ -1359,7 +1380,9 @@ class FrequencySweepWindow(QObject):
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.apply_button.setEnabled(False)
-        self.status_label.setText("Sweeping Oscillator 1; recording Demodulator 1 R/Phase...")
+        self.status_label.setText(
+            "Sweeping Oscillator 1; recording Demodulator 1 R and Demodulator 2 Phase..."
+        )
 
     @Slot(int, float)
     def on_sweep_progress(self, progress: int, remaining_s: float) -> None:
@@ -1427,9 +1450,9 @@ class FrequencySweepWindow(QObject):
         self.amplitude_axis.grid(True, alpha=0.3)
 
         self.phase_axis.clear()
-        self.phase_axis.plot(shift, phase, label="Demod 1 Phase")
+        self.phase_axis.plot(shift, phase, label="Demod 2 Phase")
         self.phase_axis.set_xlabel("Frequency Shift (Hz)")
-        self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
+        self.phase_axis.set_ylabel("Demod 2 Phase (deg)")
         self.phase_axis.grid(True, alpha=0.3)
 
         if fit is not None:

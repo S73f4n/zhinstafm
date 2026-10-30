@@ -4,7 +4,7 @@ A Nanonis-inspired Qt interface for controlling a Zurich Instruments **MFLI lock
 
 The current application supervises two hardware feedback loops:
 
-- **PLL1 — phase/frequency feedback:** Demodulator 1 phase → PI → Oscillator 1 frequency
+- **PLL1 — phase/frequency feedback:** Demodulator 2 phase → PI → Oscillator 1 frequency
 - **PID3 — amplitude feedback:** Demodulator 1 amplitude (`R`) → PI → Signal Output 1 amplitude
 
 The fast feedback loops remain inside the MFLI. Python provides the operator GUI, parameter control, live readback, resonance characterization, and PID advising.
@@ -33,12 +33,12 @@ The fast feedback loops remain inside the MFLI. Python provides the operator GUI
 
 ### Resonance characterization
 
-A separate **Frequency Sweep** window sweeps Oscillator 1 around the current center frequency and records Demodulator 1 response.
+A separate **Frequency Sweep** window sweeps Oscillator 1 around the current center frequency and records Demodulator 1 amplitude and Demodulator 2 phase, matching the feedback-loop inputs. PLL1 uses Demod Phase 2 to account for the static frequency shift.
 
 The sweep window:
 
 1. sweeps frequency over user-defined lower/upper offsets;
-2. records Demodulator 1 amplitude and phase;
+2. records Demodulator 1 amplitude and Demodulator 2 phase;
 3. plots `R` and phase versus frequency shift;
 4. fits the resonator response;
 5. extracts resonance frequency, Q, bandwidth, and phase at resonance;
@@ -161,7 +161,7 @@ The application currently expects the following instrument configuration.
 LabOne controller    PID / PLL 1
 Mode                 PLL
 Input                Demodulator phase
-Input channel        Demodulator 1
+Input channel        Demodulator 2
 Output               Oscillator frequency
 Output channel       Oscillator 1
 ```
@@ -305,7 +305,7 @@ The current sweep implementation requires:
 
 PID3 is intentionally required to be off because active amplitude regulation would flatten the measured resonance response.
 
-The sweeper uses manual bandwidth control so the application's sweep does not overwrite the existing Demodulator 1 bandwidth/filter configuration. The oscillator frequency present before the sweep is restored when the sweep ends or is stopped.
+The sweeper uses manual bandwidth control so the application's sweep does not overwrite either demodulator's bandwidth/filter configuration. Both signals are plotted and fitted against the swept Oscillator 1 frequency, allowing their demodulator reference frequencies to differ. The oscillator frequency present before the sweep is restored when the sweep ends or is stopped.
 
 ---
 
@@ -436,7 +436,7 @@ This application can directly change oscillator frequency, Signal Output amplitu
 Before using it on an AFM:
 
 - verify Signal Output range and excitation amplitude;
-- verify Demodulator 1, Oscillator 1, and Signal Output 1 routing;
+- verify Demodulators 1 and 2, Oscillator 1, and Signal Output 1 routing;
 - start with conservative excitation values;
 - check the signs and magnitudes of P/I gains before enabling a loop;
 - inspect the resonance fit before applying it;

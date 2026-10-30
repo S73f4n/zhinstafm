@@ -1127,7 +1127,7 @@
             </sizepolicy>
            </property>
            <property name="title">
-            <string>Phase</string>
+            <string>Phase (Demod 2)</string>
            </property>
            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0">
             <property name="leftMargin">
