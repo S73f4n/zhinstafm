@@ -31,17 +31,24 @@ from PySide6.QtWidgets import (
     QStyleFactory,
 )
 
-from nanonis_spinbox import NanonisLed, NanonisLockButton, NanonisSlider, NanonisSpinBox, NanonisSwitch, format_eng_number
+from nanonis_spinbox import (
+    NanonisLed,
+    NanonisLockButton,
+    NanonisSlider,
+    NanonisSpinBox,
+    NanonisSwitch,
+    format_eng_number,
+)
 
 from zhinst.toolkit import Session
 
 
-PHASE_PID_INDEX = 0      # LabOne GUI "PID / PLL 1"
+PHASE_PID_INDEX = 0  # LabOne GUI "PID / PLL 1"
 AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
-PHASE_DEMOD_INDEX = 0    # LabOne GUI "Demod Phase 1"
+
+PHASE_DEMOD_INDEX = 1  # LabOne GUI "Demod Phase 1"
+
 AMPLITUDE_DEMOD_INDEX = 0  # LabOne GUI "Demod R 1"
-REFERENCE_DEMOD_INDEX = 1  # Demodulator 2 stays at zero phase
-RESONANCE_PHASE_DEG = -90.0
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
 SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
@@ -93,21 +100,9 @@ def _values_array(payload: Any) -> np.ndarray:
     return arr[np.isfinite(arr)]
 
 
-
 def _wrap_phase_deg(value: float | np.ndarray) -> float | np.ndarray:
     """Wrap phase to the LabOne/Nanonis-style [-180, 180) interval."""
     return (np.asarray(value) + 180.0) % 360.0 - 180.0
-
-
-def _resonance_demod_phase_deg(current_shift_deg: float, measured_phase_deg: float) -> float:
-    """Reference phase giving -90 deg at resonance, with a separate excitation reference.
-
-    Increasing the demodulator reference phase decreases its measured phase.
-    Include the shift used during acquisition to obtain an absolute setting.
-    """
-    if not (math.isfinite(current_shift_deg) and math.isfinite(measured_phase_deg)):
-        raise ValueError("Demodulator shift and resonance phase must be finite.")
-    return float(_wrap_phase_deg(current_shift_deg + measured_phase_deg - RESONANCE_PHASE_DEG))
 
 
 def _resonator_amplitude_model(
@@ -154,7 +149,9 @@ def fit_resonance_sweep(
     center_guess = float(f[peak_index])
     baseline_guess = max(0.0, float(np.percentile(r, 10.0)))
     peak_height = float(r[peak_index] - baseline_guess)
-    if peak_height <= max(np.finfo(float).eps, 1e-9 * max(abs(float(r[peak_index])), 1.0)):
+    if peak_height <= max(
+        np.finfo(float).eps, 1e-9 * max(abs(float(r[peak_index])), 1.0)
+    ):
         raise ValueError("No resolvable amplitude resonance peak was found.")
 
     # Estimate the 3 dB bandwidth from the amplitude half-power level.
@@ -216,7 +213,9 @@ def fit_resonance_sweep(
     weights = np.maximum(r - baseline, 0.0)
     if not np.any(weights > 0):
         weights = np.ones_like(r)
-    phase_center_unwrapped = float(np.average(phi_unwrapped - phase_shape, weights=weights))
+    phase_center_unwrapped = float(
+        np.average(phi_unwrapped - phase_shape, weights=weights)
+    )
     phase_fit_unwrapped = phase_center_unwrapped + phase_shape
     phase_center_deg = float(_wrap_phase_deg(phase_center_unwrapped))
     phase_fit_wrapped = np.asarray(_wrap_phase_deg(phase_fit_unwrapped), dtype=float)
@@ -282,8 +281,6 @@ class MFLIWorker(QObject):
     sweep_progress = Signal(int, float)
     sweep_finished = Signal(dict)
     sweep_failed = Signal(str)
-    resonance_fit_applied = Signal(dict)
-    resonance_fit_failed = Signal(str)
     warning = Signal(str)
 
     def __init__(self) -> None:
@@ -394,7 +391,6 @@ class MFLIWorker(QObject):
         return {
             "phase_enable": int(self.phase.enable()),
             "phase_setpoint_deg": float(self.phase.setpoint()),
-            "demod_phase_shift_deg": float(self.device.demods[PHASE_DEMOD_INDEX].phaseshift()),
             "phase_p": float(self.phase.p()),
             "phase_i": float(self.phase.i()),
             "phase_center_hz": float(self.phase.center()),
@@ -419,14 +415,30 @@ class MFLIWorker(QObject):
         checks = (
             ("PLL1 mode", cfg["phase_mode"], expected.phase_mode),
             ("PLL1 input", cfg["phase_input"], expected.phase_input),
-            ("PLL1 input channel", cfg["phase_inputchannel"], expected.phase_inputchannel),
+            (
+                "PLL1 input channel",
+                cfg["phase_inputchannel"],
+                expected.phase_inputchannel,
+            ),
             ("PLL1 output", cfg["phase_output"], expected.phase_output),
-            ("PLL1 output channel", cfg["phase_outputchannel"], expected.phase_outputchannel),
+            (
+                "PLL1 output channel",
+                cfg["phase_outputchannel"],
+                expected.phase_outputchannel,
+            ),
             ("PID3 mode", cfg["amplitude_mode"], expected.amplitude_mode),
             ("PID3 input", cfg["amplitude_input"], expected.amplitude_input),
-            ("PID3 input channel", cfg["amplitude_inputchannel"], expected.amplitude_inputchannel),
+            (
+                "PID3 input channel",
+                cfg["amplitude_inputchannel"],
+                expected.amplitude_inputchannel,
+            ),
             ("PID3 output", cfg["amplitude_output"], expected.amplitude_output),
-            ("PID3 output channel", cfg["amplitude_outputchannel"], expected.amplitude_outputchannel),
+            (
+                "PID3 output channel",
+                cfg["amplitude_outputchannel"],
+                expected.amplitude_outputchannel,
+            ),
         )
 
         for label, actual, wanted in checks:
@@ -500,7 +512,6 @@ class MFLIWorker(QObject):
             except Exception:
                 pass
 
-
     def _center_average_duration(self, frequency_hz: float) -> float:
         """Choose a short averaging window that contains many fresh stream samples.
 
@@ -572,7 +583,9 @@ class MFLIWorker(QObject):
             samples = np.asarray(direct, dtype=float)
 
         if samples.size == 0:
-            raise RuntimeError('No valid PLL1 frequency samples were available for centering.')
+            raise RuntimeError(
+                "No valid PLL1 frequency samples were available for centering."
+            )
 
         return float(np.mean(samples)), int(samples.size), float(duration_s)
 
@@ -736,9 +749,7 @@ class MFLIWorker(QObject):
             )
 
         except Exception as exc:
-            self.advisor_failed.emit(
-                f"PLL Advisor failed: {type(exc).__name__}: {exc}"
-            )
+            self.advisor_failed.emit(f"PLL Advisor failed: {type(exc).__name__}: {exc}")
 
     @Slot(float, float, float, float, float)
     def advise_amplitude_pid(
@@ -784,9 +795,7 @@ class MFLIWorker(QObject):
             )
             return
         if delay_s < 0:
-            self.amp_advisor_failed.emit(
-                "Amplitude Advisor delay must be >= 0 s."
-            )
+            self.amp_advisor_failed.emit("Amplitude Advisor delay must be >= 0 s.")
             return
 
         self.amp_advisor_started.emit()
@@ -858,63 +867,6 @@ class MFLIWorker(QObject):
                 f"Amplitude Advisor failed: {type(exc).__name__}: {exc}"
             )
 
-    @Slot(dict)
-    def apply_resonance_fit(self, fit: dict) -> None:
-        """Apply a sweep fit and calibrate Demod 1 to -90 deg at resonance.
-
-        All hardware writes run in the worker thread with both loops disabled.
-        Use the acquisition phase setting so applying a fit is idempotent.
-        """
-        try:
-            if self.session is None or self.device is None:
-                raise RuntimeError("Not connected.")
-            if self._sweep_running:
-                raise RuntimeError("Wait for the frequency sweep to finish before applying a fit.")
-            if int(self.phase.enable()) or int(self.amplitude.enable()):
-                raise RuntimeError("Disable PLL1 and PID3 before applying a resonance fit.")
-            if str(fit["serial"]) != str(self.device.serial):
-                raise RuntimeError("This fit belongs to another instrument. Run a new sweep.")
-
-            center_hz = float(fit["center_hz"])
-            q_factor = float(fit["q_factor"])
-            measured_phase_deg = float(fit["phase_deg"])
-            acquired_shift_deg = float(fit["demod_phase_shift_deg"])
-            target_shift_deg = _resonance_demod_phase_deg(acquired_shift_deg, measured_phase_deg)
-            if not (math.isfinite(center_hz) and center_hz > 0 and math.isfinite(q_factor) and q_factor > 0):
-                raise ValueError("Resonance frequency and Q must be finite and positive.")
-
-            demod = self.device.demods[PHASE_DEMOD_INDEX]
-            reference_demod = self.device.demods[REFERENCE_DEMOD_INDEX]
-            current_shift_deg = float(demod.phaseshift())
-            # Permit the original acquisition setting or an already-applied fit.
-            if not any(
-                abs(float(_wrap_phase_deg(current_shift_deg - shift))) < 1e-3
-                for shift in (acquired_shift_deg, target_shift_deg)
-            ):
-                raise RuntimeError("Demod 1 phase changed since this sweep. Run a new sweep.")
-            if abs(float(_wrap_phase_deg(float(reference_demod.phaseshift())))) >= 1e-3:
-                raise RuntimeError("Demod 2 phase changed since this sweep. Run a new sweep.")
-
-            reference_demod.phaseshift(0.0, deep=True)
-            demod.phaseshift(target_shift_deg, deep=True)
-            self.phase.input(3, deep=True)  # Demodulator phase
-            self.phase.inputchannel(PHASE_DEMOD_INDEX, deep=True)
-            self.phase.setpoint(RESONANCE_PHASE_DEG, deep=True)
-            self.phase.center(center_hz, deep=True)
-            self.settings_updated.emit(self._read_settings())
-            self.resonance_fit_applied.emit({
-                "center_hz": center_hz,
-                "q_factor": q_factor,
-                "demod_phase_shift_deg": target_shift_deg,
-            })
-        except Exception as exc:
-            self.resonance_fit_failed.emit(f"Could not apply resonance fit: {type(exc).__name__}: {exc}")
-            if self.device is not None:
-                try:
-                    self.settings_updated.emit(self._read_settings())
-                except Exception:
-                    pass
-
     @Slot(float, float, int, float, float, float)
     def run_frequency_sweep(
         self,
@@ -925,12 +877,12 @@ class MFLIWorker(QObject):
         initial_settling_s: float,
         center_hz: float,
     ) -> None:
-        """Sweep Oscillator 1; record Demodulator 1 R and phase.
+        """Sweep Oscillator 1 frequency and record Demodulator 1 X/Y.
 
         The sweep range is expressed as offsets relative to ``center_hz``.
         ``period_s`` is used as the minimum averaging time per sweep point,
         matching the Nanonis Frequency Sweep notion of a point period.
-        Existing demodulator filter settings are left untouched by using the
+        Existing Demodulator 1 filter settings are left untouched by using the
         Sweeper Module's manual bandwidth-control mode.
         """
         if self.session is None or self.device is None:
@@ -963,7 +915,9 @@ class MFLIWorker(QObject):
             self.sweep_failed.emit("Sweep start frequency must be greater than 0 Hz.")
             return
         if period_s < 0 or initial_settling_s < 0:
-            self.sweep_failed.emit("Period and initial settling time must be non-negative.")
+            self.sweep_failed.emit(
+                "Period and initial settling time must be non-negative."
+            )
             return
 
         self._sweep_running = True
@@ -971,36 +925,29 @@ class MFLIWorker(QObject):
         self.sweep_started.emit()
 
         sweeper = None
-        sample_nodes: dict[int, Any] = {}
+        sample_node = None
         oscillator = self.device.oscs[0]
         original_frequency = float(oscillator.freq())
 
         try:
-            # Keep the separate reference at zero throughout acquisition and
-            # calibration. Only Demod 1 receives the fitted phase correction.
-            self.device.demods[REFERENCE_DEMOD_INDEX].phaseshift(0.0, deep=True)
-            demod_phase_shift_deg = float(self.device.demods[PHASE_DEMOD_INDEX].phaseshift())
             sweeper = self.session.modules.sweeper
             sweeper.device(self.device)
-            sample_nodes = {
-                index: self.device.demods[index].sample
-                for index in (AMPLITUDE_DEMOD_INDEX, PHASE_DEMOD_INDEX)
-            }
+            sample_node = self.device.demods[0].sample
 
-            # Use the same amplitude/phase inputs as PID3 and PLL1.
+            # Frequency sweep of Oscillator 1, recording Demodulator 1.
             sweeper.gridnode(oscillator.freq)
             sweeper.start(float(center_hz + lower_offset_hz))
             sweeper.stop(float(center_hz + upper_offset_hz))
             sweeper.samplecount(int(points))
-            sweeper.xmapping(0)          # linear frequency axis
-            sweeper.scan(0)              # sequential low -> high
+            sweeper.xmapping(0)  # linear frequency axis
+            sweeper.scan(0)  # sequential low -> high
             sweeper.loopcount(1)
             sweeper.phaseunwrap(1)
 
-            # Preserve the subscribed demodulator's bandwidth/order settings.
-            sweeper.filtermode(1)         # advanced
-            sweeper.bandwidthcontrol(0)   # manual: leave demodulator untouched
-            sweeper.bandwidth(1.0)        # required >0 even though ignored in manual mode
+            # Preserve the user's Demodulator 1 bandwidth/order settings.
+            sweeper.filtermode(1)  # advanced
+            sweeper.bandwidthcontrol(0)  # manual: leave demodulator untouched
+            sweeper.bandwidth(1.0)  # required >0 even though ignored in manual mode
             sweeper.bandwidthoverlap(1)
 
             # Wait for the existing lock-in filter to settle after each step,
@@ -1012,8 +959,7 @@ class MFLIWorker(QObject):
             sweeper.averaging.tc(1.0)
             sweeper.averaging.sample(1)
 
-            for sample_node in sample_nodes.values():
-                sweeper.subscribe(sample_node)
+            sweeper.subscribe(sample_node)
             sweeper.execute()
 
             while True:
@@ -1042,38 +988,25 @@ class MFLIWorker(QObject):
                 time.sleep(0.10)
 
             data = sweeper.read()
-            records = {}
-            for index, sample_node in sample_nodes.items():
-                node_samples = data.get(sample_node)
-                if not node_samples:
-                    raise RuntimeError(f"Sweeper returned no Demodulator {index + 1} samples.")
+            node_samples = data.get(sample_node)
+            if not node_samples:
+                raise RuntimeError("Sweeper returned no Demodulator 1 samples.")
 
-                record = node_samples[-1]
-                # Toolkit sweep results are typically [record_dict] per loop.
-                if isinstance(record, (list, tuple)):
-                    if not record:
-                        raise RuntimeError(f"Sweeper returned an empty Demodulator {index + 1} record.")
-                    record = record[0]
-                records[index] = record
+            record = node_samples[-1]
+            # Toolkit sweep results are typically [record_dict] per loop.
+            if isinstance(record, (list, tuple)):
+                if not record:
+                    raise RuntimeError("Sweeper returned an empty result record.")
+                record = record[0]
 
-            amplitude_record = records[AMPLITUDE_DEMOD_INDEX]
-            phase_record = records[PHASE_DEMOD_INDEX]
-            # The grid is Oscillator 1's swept frequency.
-            frequency = np.asarray(amplitude_record["grid"], dtype=float).reshape(-1)
-            phase_grid = np.asarray(phase_record["grid"], dtype=float).reshape(-1)
-            amp_x = np.asarray(amplitude_record["x"], dtype=float).reshape(-1)
-            amp_y = np.asarray(amplitude_record["y"], dtype=float).reshape(-1)
-            phase_x = np.asarray(phase_record["x"], dtype=float).reshape(-1)
-            phase_y = np.asarray(phase_record["y"], dtype=float).reshape(-1)
-            if not (
-                frequency.size == amp_x.size == amp_y.size == phase_x.size == phase_y.size
-            ) or frequency.size < 2:
+            frequency = np.asarray(record["frequency"], dtype=float).reshape(-1)
+            x = np.asarray(record["x"], dtype=float).reshape(-1)
+            y = np.asarray(record["y"], dtype=float).reshape(-1)
+            if not (frequency.size == x.size == y.size) or frequency.size < 2:
                 raise RuntimeError("Unexpected Sweeper result dimensions.")
-            if not np.array_equal(frequency, phase_grid):
-                raise RuntimeError("Amplitude and phase sweep grids do not match.")
 
-            amplitude = np.hypot(amp_x, amp_y)
-            phase_deg = np.rad2deg(np.angle(phase_x + 1j * phase_y))
+            amplitude = np.hypot(x, y)
+            phase_deg = np.rad2deg(np.angle(x + 1j * y))
 
             self.sweep_progress.emit(100, 0.0)
             self.sweep_finished.emit(
@@ -1084,8 +1017,6 @@ class MFLIWorker(QObject):
                     "frequency_hz": frequency.tolist(),
                     "amplitude_v": amplitude.tolist(),
                     "phase_deg": phase_deg.tolist(),
-                    "demod_phase_shift_deg": demod_phase_shift_deg,
-                    "serial": str(self.device.serial),
                 }
             )
 
@@ -1096,12 +1027,11 @@ class MFLIWorker(QObject):
                 f"Frequency sweep failed: {type(exc).__name__}: {exc}"
             )
         finally:
-            if sweeper is not None:
-                for sample_node in sample_nodes.values():
-                    try:
-                        sweeper.unsubscribe(sample_node)
-                    except Exception:
-                        pass
+            if sweeper is not None and sample_node is not None:
+                try:
+                    sweeper.unsubscribe(sample_node)
+                except Exception:
+                    pass
             try:
                 oscillator.freq(original_frequency, deep=True)
             except Exception as exc:
@@ -1147,9 +1077,7 @@ class MFLIWorker(QObject):
                     dt = self._poll_period_s / max(1, n)
                     first_t = now - self._poll_period_s + dt
                     for i, value in enumerate(values):
-                        self._amp_error_history.append(
-                            (first_t + i * dt, float(value))
-                        )
+                        self._amp_error_history.append((first_t + i * dt, float(value)))
 
             if now - self._last_phase_stream > 0.5:
                 live.update(
@@ -1180,9 +1108,7 @@ class MFLIWorker(QObject):
                     (value for _t, value in self._amp_error_history),
                     dtype=float,
                 )
-                live["amp_error_rms"] = float(
-                    np.sqrt(np.mean(np.square(rms_values)))
-                )
+                live["amp_error_rms"] = float(np.sqrt(np.mean(np.square(rms_values))))
 
             if now - self._last_lock_read > 0.5:
                 live["phase_locked"] = int(self.phase.pll.locked())
@@ -1293,7 +1219,6 @@ class FrequencySweepWindow(QObject):
         self.fit_q = self.widget(NanonisSpinBox, "fitQValue")
         self.fit_bw = self.widget(NanonisSpinBox, "fitBwValue")
         self.fit_phase = self.widget(NanonisSpinBox, "fitPhaseValue")
-        self.fit_demod_phase = self.widget(NanonisSpinBox, "fitDemodPhaseValue")
         self.fit_error = self.widget(NanonisSpinBox, "fitErrorValue")
         self.apply_button = self.widget(QPushButton, "applyFitButton")
 
@@ -1314,7 +1239,6 @@ class FrequencySweepWindow(QObject):
             (self.fit_q, ""),
             (self.fit_bw, "Hz"),
             (self.fit_phase, "deg"),
-            (self.fit_demod_phase, "deg"),
             (self.fit_error, ""),
         )
         for control, unit in editable:
@@ -1334,11 +1258,6 @@ class FrequencySweepWindow(QObject):
             control.setReadOnly(True)
             control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             control.setStyleSheet(readback_style)
-
-        self.fit_demod_phase.setToolTip(
-            "Absolute Demod 1 phase setting calculated to give -90 deg at resonance. "
-            "Written to the MFLI when Apply Fit is clicked."
-        )
 
     def _build_plots(self) -> None:
         self.amplitude_figure = Figure(figsize=(7, 3), tight_layout=True)
@@ -1417,8 +1336,13 @@ class FrequencySweepWindow(QObject):
                 if default_lower_hz < default_upper_hz:
                     self.lower_offset.setValue(float(default_lower_hz))
                     self.upper_offset.setValue(float(default_upper_hz))
-                scale = max(abs(float(default_lower_hz)), abs(float(default_upper_hz)), 1.0)
-                symmetric = abs(float(default_lower_hz) + float(default_upper_hz)) <= 1e-9 * scale
+                scale = max(
+                    abs(float(default_lower_hz)), abs(float(default_upper_hz)), 1.0
+                )
+                symmetric = (
+                    abs(float(default_lower_hz) + float(default_upper_hz))
+                    <= 1e-9 * scale
+                )
                 self.range_lock.setChecked(bool(symmetric))
             finally:
                 self._range_linking = False
@@ -1447,7 +1371,9 @@ class FrequencySweepWindow(QObject):
             self.status_label.setText("Upper sweep limit must be greater than Lower.")
             return
         if center + lower <= 0:
-            self.status_label.setText("Sweep start frequency must be greater than 0 Hz.")
+            self.status_label.setText(
+                "Sweep start frequency must be greater than 0 Hz."
+            )
             return
 
         self._last_fit = None
@@ -1466,7 +1392,7 @@ class FrequencySweepWindow(QObject):
         self.stop_button.setEnabled(True)
         self.apply_button.setEnabled(False)
         self.status_label.setText(
-            "Sweeping Oscillator 1; recording Demodulator 1 R/Phase (Demod 2 phase = 0 deg)..."
+            "Sweeping Oscillator 1; recording Demodulator 1 R/Phase..."
         )
 
     @Slot(int, float)
@@ -1490,11 +1416,6 @@ class FrequencySweepWindow(QObject):
 
         try:
             fit = fit_resonance_sweep(frequency, amplitude, phase)
-            fit["demod_phase_shift_deg"] = float(data["demod_phase_shift_deg"])
-            fit["serial"] = str(data["serial"])
-            target_shift_deg = _resonance_demod_phase_deg(
-                fit["demod_phase_shift_deg"], float(fit["phase_deg"])
-            )
         except Exception as exc:
             self._last_fit = None
             self.apply_button.setEnabled(False)
@@ -1509,13 +1430,12 @@ class FrequencySweepWindow(QObject):
         self.fit_q.setValue(float(fit["q_factor"]))
         self.fit_bw.setValue(float(fit["bandwidth_hz"]))
         self.fit_phase.setValue(float(fit["phase_deg"]))
-        self.fit_demod_phase.setValue(target_shift_deg)
         self.fit_error.setValue(float(fit["fit_error"]))
         self.apply_button.setEnabled(True)
         self._plot_data(frequency, amplitude, phase, center_used, fit)
         self.status_label.setText(
-            f"Fit complete. Apply Fit to set Demod 1 phase to {target_shift_deg:.6g} deg "
-            "for -90 deg at resonance, and copy Q and center frequency to Oscillation Control."
+            "Sweep and resonance fit complete. Review the curves, then Apply Fit "
+            "to copy Q, center frequency and phase reference to Oscillation Control."
         )
 
     @Slot(str)
@@ -1586,7 +1506,6 @@ class OscillationControlApp(QObject):
     amp_advise_requested = Signal(float, float, float, float, float)
     sweep_requested = Signal(float, float, int, float, float, float)
     sweep_stop_requested = Signal()
-    apply_fit_requested = Signal(dict)
     set_requested = Signal(str, object)
     shutdown_requested = Signal()
 
@@ -1643,7 +1562,6 @@ class OscillationControlApp(QObject):
         self.phase_setpoint = self.widget(NanonisSpinBox, "phaseSetpoint")
         self.phase_measured = self.widget(NanonisSpinBox, "phaseMeasuredValue")
         self.phase_error_label = self.widget(NanonisSpinBox, "phaseErrorValue")
-        self.demod_phase_shift = self.widget(NanonisSpinBox, "demodPhaseShiftValue")
 
         # PerfectPLL / PLL1 Advisor controls
         self.advisor_q = self.widget(NanonisSpinBox, "advisorQ")
@@ -1742,7 +1660,6 @@ class OscillationControlApp(QObject):
         readbacks = (
             (self.phase_error_label, "deg"),
             (self.phase_measured, "deg"),
-            (self.demod_phase_shift, "deg"),
             (self.phase_shift_label, "Hz"),
             (self.phase_value_label, "Hz"),
             (self.amp_error_label, "V"),
@@ -1989,7 +1906,6 @@ class OscillationControlApp(QObject):
         )
         self.amp_setpoint.setValue(amplitude_v)
 
-
     def _commit_amp_setpoint_slider_endpoint(
         self,
         value: float,
@@ -2000,13 +1916,9 @@ class OscillationControlApp(QObject):
         minimum_v = self._amp_setpoint_slider_min_v
         maximum_v = self._amp_setpoint_slider_max_v
         if edit_minimum:
-            self._set_amp_setpoint_slider_range(
-                float(value), maximum_v, user_set=True
-            )
+            self._set_amp_setpoint_slider_range(float(value), maximum_v, user_set=True)
         else:
-            self._set_amp_setpoint_slider_range(
-                minimum_v, float(value), user_set=True
-            )
+            self._set_amp_setpoint_slider_range(minimum_v, float(value), user_set=True)
 
     def _amp_setpoint_changed(self, amplitude_v: float) -> None:
         """Keep spinbox and slider synchronized and write the setpoint."""
@@ -2020,7 +1932,7 @@ class OscillationControlApp(QObject):
         if not math.isfinite(value) or value <= 0.0:
             return 1.0
         exponent = math.floor(math.log10(value))
-        decade = 10.0 ** exponent
+        decade = 10.0**exponent
         mantissa = value / decade
         if mantissa <= 1.0:
             nice = 1.0
@@ -2133,13 +2045,9 @@ class OscillationControlApp(QObject):
         minimum = float(spec["minimum"])
         maximum = float(spec["maximum"])
         if edit_minimum:
-            self._set_gain_slider_range(
-                key, float(value), maximum, user_set=True
-            )
+            self._set_gain_slider_range(key, float(value), maximum, user_set=True)
         else:
-            self._set_gain_slider_range(
-                key, minimum, float(value), user_set=True
-            )
+            self._set_gain_slider_range(key, minimum, float(value), user_set=True)
 
     def _set_amplitude_output_manual_mode(self, manual: bool) -> None:
         """Switch Output Amplitude between live readback and manual control."""
@@ -2216,13 +2124,17 @@ class OscillationControlApp(QObject):
             lambda v: self._commit_gain_slider_endpoint("phase_p", v, edit_minimum=True)
         )
         self.phase_p_slider.maximumEditCommitted.connect(
-            lambda v: self._commit_gain_slider_endpoint("phase_p", v, edit_minimum=False)
+            lambda v: self._commit_gain_slider_endpoint(
+                "phase_p", v, edit_minimum=False
+            )
         )
         self.phase_i_slider.minimumEditCommitted.connect(
             lambda v: self._commit_gain_slider_endpoint("phase_i", v, edit_minimum=True)
         )
         self.phase_i_slider.maximumEditCommitted.connect(
-            lambda v: self._commit_gain_slider_endpoint("phase_i", v, edit_minimum=False)
+            lambda v: self._commit_gain_slider_endpoint(
+                "phase_i", v, edit_minimum=False
+            )
         )
         self.phase_center.valueChanged.connect(
             lambda v: self._emit_if_user("phase_center_hz", v)
@@ -2232,21 +2144,15 @@ class OscillationControlApp(QObject):
         self.phase_range_lock.toggled.connect(self._phase_range_lock_toggled)
 
         self.amp_enable.toggled.connect(self._on_amp_enable_toggled)
-        self.amp_value_label.valueChanged.connect(
-            self._manual_output_amplitude_changed
-        )
-        self.amp_setpoint_slider.valueChanged.connect(
-            self._amp_setpoint_slider_changed
-        )
+        self.amp_value_label.valueChanged.connect(self._manual_output_amplitude_changed)
+        self.amp_setpoint_slider.valueChanged.connect(self._amp_setpoint_slider_changed)
         self.amp_setpoint_slider.minimumEditCommitted.connect(
             lambda v: self._commit_amp_setpoint_slider_endpoint(v, edit_minimum=True)
         )
         self.amp_setpoint_slider.maximumEditCommitted.connect(
             lambda v: self._commit_amp_setpoint_slider_endpoint(v, edit_minimum=False)
         )
-        self.amp_setpoint.valueChanged.connect(
-            self._amp_setpoint_changed
-        )
+        self.amp_setpoint.valueChanged.connect(self._amp_setpoint_changed)
         self.amp_p.valueChanged.connect(
             lambda v: self._gain_spinbox_changed("amp_p", v)
         )
@@ -2361,7 +2267,7 @@ class OscillationControlApp(QObject):
 
     @Slot(dict)
     def _apply_sweep_fit(self, fit: dict) -> None:
-        """Request hardware phase calibration and application of the sweep fit."""
+        """Copy resonance fit results into the main oscillation-control fields."""
         if self.phase_enable.isChecked() or self.amp_enable.isChecked():
             self.statusbar.showMessage(
                 "Disable the Phase and Amplitude controllers before applying a resonance fit.",
@@ -2369,32 +2275,22 @@ class OscillationControlApp(QObject):
             )
             return
 
-        if self.sweep_window is not None:
-            self.sweep_window.apply_button.setEnabled(False)
-        self.statusbar.showMessage("Applying resonance fit and Demod 1 phase calibration...")
-        self.apply_fit_requested.emit(dict(fit))
+        q_factor = float(fit["q_factor"])
+        center_hz = float(fit["center_hz"])
+        phase_deg = float(fit["phase_deg"])
 
-    @Slot(dict)
-    def _on_resonance_fit_applied(self, result: dict) -> None:
-        self.advisor_q.setValue(float(result["q_factor"]))
-        message = (
-            f"Resonance fit applied: f0={float(result['center_hz']):.9g} Hz, "
-            f"Q={float(result['q_factor']):.7g}, "
-            f"Demod 1 phase={float(result['demod_phase_shift_deg']):.6g} deg; "
-            "resonance/PLL reference=-90 deg; Demod 2 phase=0 deg."
-        )
-        self.statusbar.showMessage(message, 15000)
-        if self.sweep_window is not None:
-            self.sweep_window.status_label.setText(message + " Run another sweep to verify the calibrated phase.")
-
-    @Slot(str)
-    def _on_resonance_fit_failed(self, message: str) -> None:
+        # advisorQ is local UI state. Center and phase reference use their
+        # normal valueChanged paths, so they are also written to the MFLI.
+        self.advisor_q.setValue(q_factor)
+        self.phase_center.setValue(center_hz)
+        self.phase_setpoint.setValue(phase_deg)
         self.statusbar.showMessage(
-            message, 15000,
+            f"Resonance fit applied: f0={center_hz:.9g} Hz, Q={q_factor:.7g}, "
+            f"phase={phase_deg:.5g} deg.",
+            15000,
         )
         if self.sweep_window is not None:
-            self.sweep_window.status_label.setText(message)
-            self.sweep_window.apply_button.setEnabled(self.sweep_window._last_fit is not None)
+            self.sweep_window.update_center(center_hz)
 
     def _request_phase_advice(self) -> None:
         """Validate the Nanonis-style advisor fields and start PLL1 advising."""
@@ -2413,7 +2309,9 @@ class OscillationControlApp(QObject):
             self.statusbar.showMessage("Enter an Amp./Exc. gain > 0 m/V.", 8000)
             return
         if resonant_frequency <= 0:
-            self.statusbar.showMessage("Enter a resonant/center frequency > 0 Hz.", 8000)
+            self.statusbar.showMessage(
+                "Enter a resonant/center frequency > 0 Hz.", 8000
+            )
             return
 
         self._set_advisor_buttons_busy("phase")
@@ -2474,9 +2372,7 @@ class OscillationControlApp(QObject):
         self.amp_advise_button.setText(
             "Advising..." if active == "amplitude" else "Advise Amp"
         )
-        self.advise_button.setText(
-            "Advising..." if active == "phase" else "Advise Pha"
-        )
+        self.advise_button.setText("Advising..." if active == "phase" else "Advise Pha")
 
     def _set_advisor_buttons_idle(self) -> None:
         connected = not self.connect_button.isEnabled()
@@ -2503,7 +2399,6 @@ class OscillationControlApp(QObject):
         self.advise_requested.connect(self.worker.advise_phase_pll)
         self.amp_advise_requested.connect(self.worker.advise_amplitude_pid)
         self.sweep_requested.connect(self.worker.run_frequency_sweep)
-        self.apply_fit_requested.connect(self.worker.apply_resonance_fit)
         # DirectConnection is safe here because this slot only sets a
         # threading.Event; all MFLI/Sweeper calls remain in the worker thread.
         self.sweep_stop_requested.connect(
@@ -2517,8 +2412,6 @@ class OscillationControlApp(QObject):
         self.worker.connection_failed.connect(self._on_connection_failed)
         self.worker.settings_updated.connect(self._apply_settings)
         self.worker.live_updated.connect(self._apply_live)
-        self.worker.resonance_fit_applied.connect(self._on_resonance_fit_applied)
-        self.worker.resonance_fit_failed.connect(self._on_resonance_fit_failed)
         self.worker.advisor_started.connect(self._on_advisor_started)
         self.worker.advisor_finished.connect(self._on_advisor_finished)
         self.worker.advisor_failed.connect(self._on_advisor_failed)
@@ -2614,7 +2507,6 @@ class OscillationControlApp(QObject):
             self.signal_output_enable.setChecked(bool(s["signal_output_on"]))
             self.phase_enable.setChecked(bool(s["phase_enable"]))
             self.phase_setpoint.setValue(float(s["phase_setpoint_deg"]))
-            self.demod_phase_shift.setValue(float(s["demod_phase_shift_deg"]))
             self.phase_p.setValue(float(s["phase_p"]))
             self.phase_i.setValue(float(s["phase_i"]))
             self.phase_center.setValue(float(s["phase_center_hz"]))

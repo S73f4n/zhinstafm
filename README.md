@@ -33,7 +33,7 @@ The fast feedback loops remain inside the MFLI. Python provides the operator GUI
 
 ### Resonance characterization
 
-A separate **Frequency Sweep** window sweeps Oscillator 1 around the current center frequency and records Demodulator 1 amplitude and phase, matching the feedback-loop inputs. Demodulator 2's phase is set to 0° before acquisition and kept at 0° when the fit is applied.
+A separate **Frequency Sweep** window sweeps Oscillator 1 around the current center frequency and records Demodulator 1 response.
 
 The sweep window:
 
@@ -47,25 +47,10 @@ The sweep window:
 Applying a fit updates:
 
 ```text
-Resonance frequency       -> Center Freq.
-Q-factor                  -> Q-Factor
-Calculated reference phase -> Demodulator 1 Phase Shift
--90 degrees               -> PLL1 Phase Ref.
-Demodulator 1 phase       -> PLL1 input
-0 degrees                 -> Demodulator 2 Phase Shift
+Resonance frequency  -> Center Freq.
+Q-factor             -> Q-Factor
+Phase at resonance   -> Phase Ref.
 ```
-
-The sweep window shows both the measured **Res. Phase** and the calculated absolute **Demod 1 Shift** before applying the fit. The main window shows the actual Demod 1 shift read back from the instrument. Acquired curves remain in their original phase frame; run a new sweep after applying the fit to verify that resonance reads -90°.
-
-The correction includes the Demod 1 phase setting used during acquisition:
-
-```text
-new Demod 1 shift = wrap(old Demod 1 shift + fitted resonance phase + 90 degrees)
-```
-
-For example, with an existing shift of 10° and a fitted resonance phase of -130°, the new shift is -30°. Shifting the demodulator reference by -40° makes the measured resonance phase -90°. Applying the same fit again writes the same absolute setting. If either demodulator's phase has changed independently since acquisition, run a new sweep.
-
-This calibration assumes the excitation uses a separate reference, as in this setup. A demodulator phase setting can also rotate its associated generated signal; using Demod 1 for both excitation and measurement would cancel the intended correction. See the [MFLI lock-in reference-phase documentation](https://docs.zhinst.com/mfli_user_manual/functional_description/lock_in_mf.html).
 
 ### PID / PLL Advisor
 
@@ -109,7 +94,7 @@ The editable field contains the numerical value and optional SI prefix; the fixe
 ```text
 Center Freq. (Hz)    [ 974.494110k ]
 Amplitude (V)        [ 60.000000m ]
-Phase Ref. (deg)     [ -90.000000 ]
+Phase Ref. (deg)     [ -138.000000 ]
 ```
 
 Accepted prefixes include:
@@ -192,7 +177,7 @@ Output               Signal Output amplitude
 Output channel       Signal Output 1 / Amplitude 1
 ```
 
-The application checks this routing when it connects. A mismatch produces a warning. **Apply Fit** explicitly selects Demodulator 1 phase as PLL1's input, writes the calibrated demodulator phase settings and center frequency, and sets the PLL1 phase reference to -90°. Both controllers must be disabled; excitation and amplitude-controller routing are preserved.
+The application checks this routing when it connects. A mismatch produces a warning; the app does **not** silently reconfigure the instrument.
 
 ---
 
@@ -300,7 +285,7 @@ mfli_connection.yaml
 5. Enable Signal Output 1 and select a safe initial drive amplitude.
 6. Keep PLL1 and PID3 disabled.
 7. Open **Frequency Sweep...** and characterize the resonance.
-8. Review the fit and calculated Demod 1 Shift, then Apply Fit to update center frequency and Q and calibrate resonance to -90°. Run another sweep to verify the phase.
+8. Fit the resonance and apply center frequency, Q, and phase.
 9. Enter the desired amplitude and phase controller bandwidths.
 10. Run **Advise Amp** and **Advise Pha**.
 11. Review the resulting P/I values.
@@ -320,7 +305,7 @@ The current sweep implementation requires:
 
 PID3 is intentionally required to be off because active amplitude regulation would flatten the measured resonance response.
 
-The sweeper uses manual bandwidth control so the application's sweep does not overwrite the demodulator's bandwidth/filter configuration. Amplitude and phase are plotted and fitted against the swept Oscillator 1 frequency. The oscillator frequency present before the sweep is restored when the sweep ends or is stopped. Demodulator 1's phase is changed only by Apply Fit; Demodulator 2's phase is set to 0° before acquisition.
+The sweeper uses manual bandwidth control so the application's sweep does not overwrite the existing Demodulator 1 bandwidth/filter configuration. The oscillator frequency present before the sweep is restored when the sweep ends or is stopped.
 
 ---
 
@@ -451,7 +436,7 @@ This application can directly change oscillator frequency, Signal Output amplitu
 Before using it on an AFM:
 
 - verify Signal Output range and excitation amplitude;
-- verify Demodulators 1 and 2, Oscillator 1, and Signal Output 1 routing;
+- verify Demodulator 1, Oscillator 1, and Signal Output 1 routing;
 - start with conservative excitation values;
 - check the signs and magnitudes of P/I gains before enabling a loop;
 - inspect the resonance fit before applying it;
