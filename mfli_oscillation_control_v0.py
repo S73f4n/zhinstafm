@@ -49,6 +49,9 @@ AMPLITUDE_PID_INDEX = 2  # LabOne GUI "PID / PLL 3"
 PHASE_DEMOD_INDEX = 1  # LabOne GUI "Demod Phase 1"
 
 AMPLITUDE_DEMOD_INDEX = 0  # LabOne GUI "Demod R 1"
+
+PHASE_SHIFT_AT_RESONANCE = -90
+
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
 SWEEP_UI_FILENAME = "frequency_sweep.ui"
 CONNECTION_CONFIG_FILENAME = "mfli_connection.yaml"
@@ -1219,6 +1222,7 @@ class FrequencySweepWindow(QObject):
         self.fit_q = self.widget(NanonisSpinBox, "fitQValue")
         self.fit_bw = self.widget(NanonisSpinBox, "fitBwValue")
         self.fit_phase = self.widget(NanonisSpinBox, "fitPhaseValue")
+        self.phase_display_shift = self.widget(NanonisSpinBox, "phaseDisplayShiftValue")
         self.fit_error = self.widget(NanonisSpinBox, "fitErrorValue")
         self.apply_button = self.widget(QPushButton, "applyFitButton")
 
@@ -1239,6 +1243,7 @@ class FrequencySweepWindow(QObject):
             (self.fit_q, ""),
             (self.fit_bw, "Hz"),
             (self.fit_phase, "deg"),
+            (self.phase_display_shift, "deg"),
             (self.fit_error, ""),
         )
         for control, unit in editable:
@@ -1281,6 +1286,7 @@ class FrequencySweepWindow(QObject):
         self.phase_axis.set_xlabel("Frequency Shift (Hz)")
         self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
         self.phase_axis.grid(True, alpha=0.3)
+        self.phase_display_shift.setValue(0.0)
         self.amplitude_canvas.draw_idle()
         self.phase_canvas.draw_idle()
 
@@ -1434,7 +1440,8 @@ class FrequencySweepWindow(QObject):
         self.apply_button.setEnabled(True)
         self._plot_data(frequency, amplitude, phase, center_used, fit)
         self.status_label.setText(
-            "Sweep and resonance fit complete. Review the curves, then Apply Fit "
+            f"Phase display shifted by {self.phase_display_shift.value():+.6g} deg "
+            "so resonance is at -90 deg. Review the curves, then Apply Fit "
             "to copy Q, center frequency and phase reference to Oscillation Control."
         )
 
@@ -1453,6 +1460,15 @@ class FrequencySweepWindow(QObject):
         fit: dict[str, Any] | None,
     ) -> None:
         shift = frequency - sweep_center
+        # Shift only the plotted curves. Keep acquired data and the fit used by
+        # Apply Fit in their original phase frame.
+        phase_shift_deg = (
+            float(_wrap_phase_deg(PHASE_SHIFT_AT_RESONANCE - float(fit["phase_deg"])))
+            if fit is not None
+            else 0.0
+        )
+        self.phase_display_shift.setValue(phase_shift_deg)
+        displayed_phase = _wrap_phase_deg(phase + phase_shift_deg)
 
         self.amplitude_axis.clear()
         self.amplitude_axis.plot(shift, amplitude, label="Demod 1 R")
@@ -1461,9 +1477,11 @@ class FrequencySweepWindow(QObject):
         self.amplitude_axis.grid(True, alpha=0.3)
 
         self.phase_axis.clear()
-        self.phase_axis.plot(shift, phase, label="Demod 1 Phase")
+        self.phase_axis.plot(shift, displayed_phase, label="Demod 1 Phase")
         self.phase_axis.set_xlabel("Frequency Shift (Hz)")
-        self.phase_axis.set_ylabel("Demod 1 Phase (deg)")
+        self.phase_axis.set_ylabel(
+            "Demod 1 Phase (deg, shifted)" if fit is not None else "Demod 1 Phase (deg)"
+        )
         self.phase_axis.grid(True, alpha=0.3)
 
         if fit is not None:
@@ -1477,7 +1495,9 @@ class FrequencySweepWindow(QObject):
             )
             self.phase_axis.plot(
                 fit_shift,
-                np.asarray(fit["fit_phase_deg"], dtype=float),
+                _wrap_phase_deg(
+                    np.asarray(fit["fit_phase_deg"], dtype=float) + phase_shift_deg
+                ),
                 linestyle="--",
                 label="Phase fit",
             )
