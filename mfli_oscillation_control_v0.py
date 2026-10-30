@@ -51,6 +51,8 @@ PHASE_DEMOD_INDEX = 1  # LabOne GUI "Demod Phase 1"
 AMPLITUDE_DEMOD_INDEX = 0  # LabOne GUI "Demod R 1"
 
 PHASE_SHIFT_AT_RESONANCE = -90
+# Use the central phase transition to fit its slope, allowing for curvature.
+PHASE_Q_FIT_HALF_RANGE_DEG = 45.0
 
 UI_FILENAME = "mfli_oscillation_control_v0.ui"
 SWEEP_UI_FILENAME = "frequency_sweep.ui"
@@ -125,13 +127,11 @@ def fit_resonance_sweep(
     amplitude_v: np.ndarray,
     phase_deg: np.ndarray,
 ) -> dict[str, Any]:
-    """Fit center frequency/Q from R and phase-at-center from demodulator phase.
+    """Fit the center from R and derive Q from the local phase slope.
 
-    LabOne's Math tab describes the resonance analysis as a Lorentzian fit for
-    Demod R and an inverse-tangent fit for Demod Phase.  This implementation
-    uses the equivalent near-resonance resonator-amplitude response for R,
-    then fits the phase offset of an arctangent response using the resulting
-    center frequency and Q.
+    Fit an arctangent to unwrapped phase near resonance, with a free offset
+    and slope. Q = f0 * abs(dphi/df) / 2, where phase is in radians. The
+    amplitude fit is retained for the center and amplitude curve only.
     """
     f = np.asarray(frequency_hz, dtype=float).reshape(-1)
     r = np.asarray(amplitude_v, dtype=float).reshape(-1)
@@ -193,46 +193,64 @@ def fit_resonance_sweep(
         bounds=(lower_bounds, upper_bounds),
         maxfev=30000,
     )
-    baseline, resonance_amplitude, center_hz, q_factor = map(float, popt)
-    if q_factor <= 0 or center_hz <= 0:
+    baseline, resonance_amplitude, center_hz, amplitude_q_factor = map(float, popt)
+    if amplitude_q_factor <= 0 or center_hz <= 0:
         raise ValueError("Resonance fit returned non-physical center frequency or Q.")
 
-    bandwidth_hz = center_hz / q_factor
     r_fit = _resonator_amplitude_model(f, *popt)
     amplitude_range = max(float(np.ptp(r)), np.finfo(float).eps)
     fit_error = float(np.sqrt(np.mean((r - r_fit) ** 2)) / amplitude_range)
 
-    # Unwrap phase for fitting. The sign is inferred from the measured phase
-    # slope so the same model works for either wiring/polarity convention.
+    # Select a local phase interval independently of the amplitude linewidth.
     phi_unwrapped = np.rad2deg(np.unwrap(np.deg2rad(phi)))
-    slope = float(np.polyfit(f, phi_unwrapped, 1)[0])
-    phase_sign = 1.0 if slope >= 0 else -1.0
-    phase_shape = phase_sign * np.rad2deg(
-        np.arctan(2.0 * q_factor * (f - center_hz) / center_hz)
+    phase_center_guess = float(np.interp(center_hz, f, phi_unwrapped))
+    phase_mask = (
+        np.abs(phi_unwrapped - phase_center_guess) <= PHASE_Q_FIT_HALF_RANGE_DEG
     )
+    local_f = f[phase_mask]
+    local_phi_rad = np.deg2rad(phi_unwrapped[phase_mask])
+    if np.unique(local_f).size < 5 or not (local_f[0] < center_hz < local_f[-1]):
+        raise ValueError(
+            "Need at least 5 distinct phase samples around resonance to fit Q. "
+            "Narrow the sweep range or increase the number of points."
+        )
+    if float(np.ptp(local_phi_rad)) <= 1e-9:
+        raise ValueError("No resolvable phase slope around resonance was found.")
 
-    # Weight the phase offset estimate toward the resonance where the signal
-    # amplitude and therefore phase SNR are best.
-    weights = np.maximum(r - baseline, 0.0)
-    if not np.any(weights > 0):
-        weights = np.ones_like(r)
-    phase_center_unwrapped = float(
-        np.average(phi_unwrapped - phase_shape, weights=weights)
-    )
-    phase_fit_unwrapped = phase_center_unwrapped + phase_shape
-    phase_center_deg = float(_wrap_phase_deg(phase_center_unwrapped))
-    phase_fit_wrapped = np.asarray(_wrap_phase_deg(phase_fit_unwrapped), dtype=float)
+    # Normalize frequency for stable fitting even for very narrow resonances.
+    frequency_scale_hz = float(np.max(np.abs(local_f - center_hz)))
+    local_offset = (local_f - center_hz) / frequency_scale_hz
+    slope_guess, offset_guess = np.polyfit(local_offset, local_phi_rad, 1)
 
-    phase_error_deg = float(
-        np.sqrt(np.average((phi_unwrapped - phase_fit_unwrapped) ** 2, weights=weights))
+    def phase_model(
+        offset: np.ndarray, phase_center_rad: float, slope_rad: float
+    ) -> np.ndarray:
+        return phase_center_rad + np.arctan(slope_rad * offset)
+
+    phase_popt, _ = curve_fit(
+        phase_model,
+        local_offset,
+        local_phi_rad,
+        p0=[float(offset_guess), float(slope_guess)],
+        maxfev=30000,
     )
+    phase_center_rad, scaled_slope_rad = map(float, phase_popt)
+    phase_slope_rad_per_hz = scaled_slope_rad / frequency_scale_hz
+    q_factor = 0.5 * center_hz * abs(phase_slope_rad_per_hz)
+    if not (math.isfinite(q_factor) and q_factor > 0):
+        raise ValueError("Phase slope fit returned a non-physical Q.")
+    bandwidth_hz = center_hz / q_factor
+    phase_center_deg = float(_wrap_phase_deg(np.rad2deg(phase_center_rad)))
+
+    phase_residual_rad = local_phi_rad - phase_model(local_offset, *phase_popt)
+    phase_error_deg = float(np.rad2deg(np.sqrt(np.mean(phase_residual_rad ** 2))))
 
     fit_frequency = np.linspace(float(f[0]), float(f[-1]), 1200)
     fit_amplitude = _resonator_amplitude_model(
-        fit_frequency, baseline, resonance_amplitude, center_hz, q_factor
+        fit_frequency, baseline, resonance_amplitude, center_hz, amplitude_q_factor
     )
-    fit_phase_unwrapped = phase_center_unwrapped + phase_sign * np.rad2deg(
-        np.arctan(2.0 * q_factor * (fit_frequency - center_hz) / center_hz)
+    fit_phase_unwrapped = np.rad2deg(
+        phase_model((fit_frequency - center_hz) / frequency_scale_hz, *phase_popt)
     )
     fit_phase = np.asarray(_wrap_phase_deg(fit_phase_unwrapped), dtype=float)
 
@@ -243,6 +261,7 @@ def fit_resonance_sweep(
         "phase_deg": phase_center_deg,
         "fit_error": fit_error,
         "phase_fit_error_deg": phase_error_deg,
+        "phase_slope_deg_per_hz": float(np.rad2deg(phase_slope_rad_per_hz)),
         "fit_frequency_hz": fit_frequency,
         "fit_amplitude_v": fit_amplitude,
         "fit_phase_deg": fit_phase,
@@ -1273,6 +1292,9 @@ class FrequencySweepWindow(QObject):
             control.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             control.setStyleSheet(readback_style)
 
+        self.fit_q.setToolTip("Q from the fitted phase slope around resonance.")
+        self.fit_bw.setToolTip("Resonance frequency divided by the phase-slope Q.")
+
     def _build_plots(self) -> None:
         self.amplitude_figure = Figure(figsize=(7, 3), tight_layout=True)
         self.amplitude_canvas = FigureCanvas(self.amplitude_figure)
@@ -1503,7 +1525,7 @@ class FrequencySweepWindow(QObject):
                 fit_shift,
                 np.asarray(fit["fit_amplitude_v"], dtype=float),
                 linestyle="--",
-                label="Resonance fit",
+                label="Amplitude fit",
             )
             self.phase_axis.plot(
                 fit_shift,
@@ -1511,7 +1533,7 @@ class FrequencySweepWindow(QObject):
                     np.asarray(fit["fit_phase_deg"], dtype=float) + phase_shift_deg
                 ),
                 linestyle="--",
-                label="Phase fit",
+                label="Phase fit (Q from slope)",
             )
             center_shift = float(fit["center_hz"]) - sweep_center
             self.amplitude_axis.axvline(center_shift, linestyle=":")
