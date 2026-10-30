@@ -467,6 +467,15 @@ class MFLIWorker(QObject):
                 self.phase.enable(int(bool(value)), deep=True)
             elif key == "phase_setpoint_deg":
                 self.phase.setpoint(float(value), deep=True)
+            elif key == "demod1_phase_deg":
+                if int(self.phase.enable()) or int(self.amplitude.enable()):
+                    raise RuntimeError(
+                        "Disable the Phase and Amplitude controllers before setting Demod 1 phase."
+                    )
+                phase_deg = float(value)
+                if not math.isfinite(phase_deg):
+                    raise ValueError("Demod 1 phase must be finite.")
+                self.device.demods[0].phaseshift(phase_deg, deep=True)
             elif key == "phase_p":
                 self.phase.p(float(value), deep=True)
             elif key == "phase_i":
@@ -1390,7 +1399,9 @@ class FrequencySweepWindow(QObject):
 
     def _apply_fit(self) -> None:
         if self._last_fit is not None:
-            self.apply_requested.emit(dict(self._last_fit))
+            fit = dict(self._last_fit)
+            fit["phase_display_shift_deg"] = float(self.phase_display_shift.value())
+            self.apply_requested.emit(fit)
 
     @Slot()
     def on_sweep_started(self) -> None:
@@ -1442,7 +1453,8 @@ class FrequencySweepWindow(QObject):
         self.status_label.setText(
             f"Phase display shifted by {self.phase_display_shift.value():+.6g} deg "
             "so resonance is at -90 deg. Review the curves, then Apply Fit "
-            "to copy Q, center frequency and phase reference to Oscillation Control."
+            "to write this shift to Demod 1 phase and copy Q, center frequency "
+            "and phase reference to Oscillation Control."
         )
 
     @Slot(str)
@@ -2287,7 +2299,7 @@ class OscillationControlApp(QObject):
 
     @Slot(dict)
     def _apply_sweep_fit(self, fit: dict) -> None:
-        """Copy resonance fit results into the main oscillation-control fields."""
+        """Apply fit results and write the displayed shift to Demodulator 1 phase."""
         if self.phase_enable.isChecked() or self.amp_enable.isChecked():
             self.statusbar.showMessage(
                 "Disable the Phase and Amplitude controllers before applying a resonance fit.",
@@ -2298,6 +2310,9 @@ class OscillationControlApp(QObject):
         q_factor = float(fit["q_factor"])
         center_hz = float(fit["center_hz"])
         phase_deg = float(fit["phase_deg"])
+        display_shift_deg = float(fit["phase_display_shift_deg"])
+
+        self.set_requested.emit("demod1_phase_deg", display_shift_deg)
 
         # advisorQ is local UI state. Center and phase reference use their
         # normal valueChanged paths, so they are also written to the MFLI.
@@ -2306,7 +2321,7 @@ class OscillationControlApp(QObject):
         self.phase_setpoint.setValue(phase_deg)
         self.statusbar.showMessage(
             f"Resonance fit applied: f0={center_hz:.9g} Hz, Q={q_factor:.7g}, "
-            f"phase={phase_deg:.5g} deg.",
+            f"phase={phase_deg:.5g} deg, Demod 1 phase={display_shift_deg:.6g} deg.",
             15000,
         )
         if self.sweep_window is not None:
